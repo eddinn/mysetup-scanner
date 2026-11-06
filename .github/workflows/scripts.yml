@@ -1,0 +1,90 @@
+name: Scan scripts
+
+on:
+  push:
+    paths:
+      - scripts/**
+      - tests/**
+      - .github/workflows/scripts.yml
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scripts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lint
+        run: shellcheck -s sh scripts/mysetup-scan.sh
+      - name: Made-up computers
+        run: python3 -B tests/test_scan_sh.py
+      - name: This runner
+        run: |
+          sh scripts/mysetup-scan.sh > report.txt
+          cat report.txt
+          python3 -B tests/validate_report.py report.txt
+      # Real tools of other distributions. A container is not a real machine: this shows the script
+      # runs and its report is valid there, not that real hardware reads correctly.
+      - name: Other distributions
+        run: |
+          for image in alpine:3.20 debian:12-slim ubuntu:24.04 fedora:41 rockylinux:9-minimal archlinux:base \
+            opensuse/leap:15.6 ghcr.io/void-linux/void-musl:latest; do
+            echo "::group::$image"
+            status=0
+            docker run --rm -i "$image" sh -s < scripts/mysetup-scan.sh > report.txt || status=$?
+            cat report.txt
+            if [ "$status" -eq 3 ]; then
+              echo "This image has no awk: the script said so."
+            elif [ "$status" -ne 0 ]; then
+              echo "::error::$image exited with $status"
+              exit 1
+            else
+              python3 -B tests/validate_report.py report.txt
+            fi
+            echo "::endgroup::"
+          done
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lint
+        shell: powershell
+        run: |
+          $found = Invoke-ScriptAnalyzer -Path scripts\mysetup-scan.ps1 -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost
+          $found | Format-List RuleName, Line, Message
+          if ($found) { exit 1 }
+      - name: Made-up computer
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\test_scan_ps1.ps1 -ReportPath "$PWD\made-up.txt"
+      - name: Its report
+        run: python -B tests/validate_report.py made-up.txt
+      - name: This runner, with the member's command
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\mysetup-scan.ps1 | Set-Content -Encoding ascii report.txt
+          Get-Content report.txt
+      - name: Its report
+        run: python -B tests/validate_report.py report.txt
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Made-up computers
+        run: python3 -B tests/test_scan_sh.py
+      # A virtual machine, not a real Mac: this shows Apple's tools answer as expected, not real hardware.
+      - name: This runner
+        run: |
+          sh scripts/mysetup-scan.sh > report.txt
+          cat report.txt
+          python3 -B tests/validate_report.py report.txt
