@@ -11,7 +11,7 @@ Tells [MySetup](https://mysetup.is) what hardware your computer has. MySetup off
 This repository holds the script and the app. The script's first release is
 [v0.1.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.1.0) (November 2026). The app, a Go program, is being built in
 stages, and its first test release is the pre-release
-[app-v0.1.0-beta.1](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.1.0-beta.1); see [The app](#the-app-beta).
+[app-v0.1.0-beta.2](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.1.0-beta.2); see [The app](#the-app-beta).
 
 ## The script
 
@@ -63,7 +63,7 @@ where no browser can be opened, such as over SSH. It only reads: nothing is sent
 installed.
 
 Test builds for Windows and Linux, on x86-64 and ARM, are in the
-[pre-release](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.1.0-beta.1):
+[pre-release](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.1.0-beta.2):
 
 - **Windows:** download `mysetup-scan-windows-x86-64.exe` (or `-arm64.exe`) and double-click it. The app is not code-signed yet, so
   SmartScreen warns about it: choose "More info", then "Run anyway".

@@ -41,7 +41,8 @@ jobs:
           test -s "docs/releases/${GITHUB_REF_NAME}.md"
           if [ -n "$pre" ]; then echo "KIND=--prerelease" >> "$GITHUB_ENV"; else echo "KIND=" >> "$GITHUB_ENV"; fi
 
-      # Built outside the checkout: Go records whether the working tree is modified.
+      # -buildvcs=false: the bytes depend on the source and Go's version alone, not on the clone's tags or state, so a shallow
+      # clone, a full clone and a source archive all rebuild them (Go 1.24 and later stamp a version from the nearest tag).
       - name: Build each system twice; the bytes must be the same
         run: |
           mkdir -p "$RUNNER_TEMP/a" "$RUNNER_TEMP/b" "$RUNNER_TEMP/dist"
@@ -49,8 +50,8 @@ jobs:
             os=${target%%/*}; rest=${target#*/}; arch=${rest%%/*}; label=${rest#*/}
             ext=; [ "$os" = windows ] && ext=.exe
             name="mysetup-scan-$os-$label$ext"
-            GOOS=$os GOARCH=$arch go build -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/a/$name" ./cmd/mysetup-scan
-            GOOS=$os GOARCH=$arch go build -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/b/$name" ./cmd/mysetup-scan
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/a/$name" ./cmd/mysetup-scan
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/b/$name" ./cmd/mysetup-scan
             cmp "$RUNNER_TEMP/a/$name" "$RUNNER_TEMP/b/$name"
             cp "$RUNNER_TEMP/a/$name" "$RUNNER_TEMP/dist/"
           done

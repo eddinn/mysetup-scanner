@@ -32,7 +32,7 @@ The page ends when you click Done, about 90 seconds after its tab closes, or aft
 |---|---|
 | `--cli` | Prints the report in the terminal instead of opening the page |
 | `--no-browser` | Serves the page without opening a browser, and prints its address to open yourself |
-| `--help`, `--version` | Shows the options, or the version (`0.1.0-beta.1`) |
+| `--help`, `--version` | Shows the options, or the version (`0.1.0-beta.2`) |
 
 On Linux, run with `sudo`, the app can also read memory modules on a system without udev. It says when that would add something.
 
@@ -40,7 +40,7 @@ On Linux, run with `sudo`, the app can also read memory modules on a system with
 
 It listens on 127.0.0.1 alone, at an address with a random one-time token, and refuses any request without it. It also refuses
 another site's name for 127.0.0.1, and a request from another site to end it. A content policy lets the page load nothing from
-anywhere else. Details are in [docs/app.md](https://github.com/eddinn/mysetup-scanner/blob/app-v0.1.0-beta.1/docs/app.md).
+anywhere else. Details are in [docs/app.md](https://github.com/eddinn/mysetup-scanner/blob/app-v0.1.0-beta.2/docs/app.md).
 
 ## Check a download
 
@@ -51,6 +51,15 @@ gh attestation verify mysetup-scan-linux-x86-64 --repo eddinn/mysetup-scanner
 
 The attestation records that the file was built from this repository at this tag. Each file was built twice and the release was
 refused unless the bytes were the same.
+
+You can also rebuild a file yourself and compare it. With Go 1.27.3, from this tag (any clone, or the source archive):
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o mysetup-scan-linux-x86-64 ./cmd/mysetup-scan
+sha256sum mysetup-scan-linux-x86-64
+```
+
+For the other files, set `GOOS` to `windows` or `linux` and `GOARCH` to `amd64` or `arm64`.
 
 ## Where it has been tested
 
@@ -67,6 +76,6 @@ Inside WSL it declines and sends you to the Windows app.
 
 Usernames, hostnames, IP or MAC addresses, motherboard or system UUIDs, machine GUIDs, Windows SIDs, product keys, disk serial
 numbers, file paths, file names, network names or other software. The report format is in
-[docs/report-format.md](https://github.com/eddinn/mysetup-scanner/blob/app-v0.1.0-beta.1/docs/report-format.md).
+[docs/report-format.md](https://github.com/eddinn/mysetup-scanner/blob/app-v0.1.0-beta.2/docs/report-format.md).
 
 Licence: Apache-2.0.

@@ -46,7 +46,8 @@ jobs:
           done
       - name: Made-up computers
         run: go test -count=1 ./...
-      # Built outside the checkout: Go records whether the working tree is modified, and a build left inside it would be.
+      # -buildvcs=false, as the release builds: the bytes depend on the source and Go's version alone, not on the clone's tags or
+      # state. Built outside the checkout, which the last check keeps clean.
       - name: The same source gives the same bytes
         working-directory: ${{ github.workspace }}
         run: |
@@ -55,8 +56,8 @@ jobs:
           for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 freebsd/amd64 openbsd/amd64 netbsd/amd64 illumos/amd64; do
             os=${target%/*}; arch=${target#*/}; ext=; [ "$os" = windows ] && ext=.exe
             name=mysetup-scan-$os-$arch$ext
-            GOOS=$os GOARCH=$arch go build -trimpath -ldflags='-s -w -buildid=' -o "$a/$name" ./cmd/mysetup-scan
-            GOOS=$os GOARCH=$arch go build -trimpath -ldflags='-s -w -buildid=' -o "$b/$name" ./cmd/mysetup-scan
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$a/$name" ./cmd/mysetup-scan
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$b/$name" ./cmd/mysetup-scan
             cmp "$a/$name" "$b/$name"
             cp "$a/$name" "$dist/"
           done

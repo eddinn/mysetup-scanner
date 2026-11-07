@@ -16,7 +16,7 @@ const Version = "0.1.0"
 // Prerelease marks a test build of Version, such as "beta.1", and is empty in a release. The app shows it with its version; the
 // report's source leaves it out, since a test build writes the same report as the release. The release workflow refuses a tag
 // that does not match both.
-const Prerelease = "beta.1"
+const Prerelease = "beta.2"
 
 // Source is what the report's source field says: the app and its version.
 const Source = "app/" + Version

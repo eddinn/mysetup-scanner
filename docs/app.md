@@ -4,7 +4,7 @@ A Go program that reads the same report as the scripts ([report-format.md](repor
 shows it on a page in your own browser, or in the terminal with `--cli`. The design and the operator's decisions are in MySetup's
 `docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is here: reading, and the two front
 ends. The site side (codes, upload, server checks), sending from the page, and code signing come in the next stages. Its first
-test release is `app-v0.1.0-beta.1`.
+test release is `app-v0.1.0-beta.2`.
 
 ## The page and the terminal
 
@@ -92,7 +92,7 @@ Go 1.27 or newer:
 ```sh
 go vet ./...
 go test ./...
-CGO_ENABLED=0 go build -trimpath -ldflags='-s -w -buildid=' -o mysetup-scan ./cmd/mysetup-scan
+CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o mysetup-scan ./cmd/mysetup-scan
 ./mysetup-scan --cli > report.txt
 python3 -B tests/validate_report.py report.txt
 ./mysetup-scan
@@ -112,3 +112,14 @@ A release starts from a signed tag `app-v<version>`, such as `app-v0.1.0-beta.1`
 twice and fails if the bytes differ. It attaches the four files and `SHA256SUMS`, attests them, and drafts the release, which a
 person reads and publishes. A tag with a pre-release part, such as `-beta.1`, becomes a pre-release, which never takes the
 repository's "latest release" from the scripts. The app is not code-signed yet, so Windows SmartScreen warns about it.
+
+Anyone can rebuild a release and compare the bytes. Use the Go version in `go.mod` (1.27.3) and the release's tag, from any kind
+of clone or a source archive:
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o mysetup-scan-linux-x86-64 ./cmd/mysetup-scan
+```
+
+`-buildvcs=false` keeps the clone's state out of the file. Since Go 1.24, a build otherwise stamps a version from the nearest tag,
+which a shallow clone does not have. The first test tag, `app-v0.1.0-beta.1`, was built without it and was never published; its
+files rebuild only from a shallow clone. `app-v0.1.0-beta.2` is the first test release.
