@@ -6,11 +6,12 @@ Tells [MySetup](https://mysetup.is) what hardware your computer has. MySetup off
 |---|---|---|---|
 | Needs | Nothing | Nothing installed | A download |
 | Detail | Least | Full | Full |
-| Best mark | Detected | Detected | Verified |
+| Best mark | Detected | Detected | Verified, once sending is built |
 
-This repository holds the script. Its first release is [v0.1.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.1.0)
-(November 2026). The app, a Go program, is being built in stages: stage 1 reads the hardware and prints the same report; see
-[docs/app.md](docs/app.md). It is not released yet.
+This repository holds the script and the app. The script's first release is
+[v0.1.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.1.0) (November 2026). The app, a Go program, is being built in
+stages, and its first test release is the pre-release
+[app-v0.1.0-beta.1](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.1.0-beta.1); see [The app](#the-app-beta).
 
 ## The script
 
@@ -53,7 +54,27 @@ gh attestation verify mysetup-scan.sh --repo eddinn/mysetup-scanner
 
 MySetup's build page shows each file's SHA-256 too. The scripts are not code-signed yet.
 
-## Requirements
+## The app (beta)
+
+One file with nothing to install: no runtime, no PowerShell, no Python. It reads the same report as the script, and shows it on a
+page in your own browser, with buttons to copy it or save it as a file. The page is served from your computer only and ends when
+you click Done, close its tab, or after 15 minutes. With `--cli` the app prints the report in the terminal instead, as it also does
+where no browser can be opened, such as over SSH. It only reads: nothing is sent anywhere, no files are written, and nothing is
+installed.
+
+Test builds for Windows and Linux, on x86-64 and ARM, are in the
+[pre-release](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.1.0-beta.1):
+
+- **Windows:** download `mysetup-scan-windows-x86-64.exe` (or `-arm64.exe`) and double-click it. The app is not code-signed yet, so
+  SmartScreen warns about it: choose "More info", then "Run anyway".
+- **Linux:** download `mysetup-scan-linux-x86-64` (or `-arm64`), then `chmod +x mysetup-scan-linux-x86-64` and
+  `./mysetup-scan-linux-x86-64`. Add `--cli` for the terminal.
+
+Check a download the same way as the scripts, with the release's `SHA256SUMS` and
+`gh attestation verify mysetup-scan-linux-x86-64 --repo eddinn/mysetup-scanner`. Other systems build from source. How the app
+reads each system, how its page is hardened, and what has been tested are in [docs/app.md](docs/app.md).
+
+## What the script needs
 
 | System | Reads with | To install | Tested on a real machine |
 |---|---|---|---|
@@ -128,9 +149,10 @@ The app has its own steps in [docs/app.md](docs/app.md#build-and-test).
 `tools/measure-matches.php` measures how often real reports' parts match the MySetup catalogue, through the site's own parser and
 matcher; it runs in `php artisan tinker` in a checkout of the site (the file says how).
 
-A release starts from a signed tag `v<version>` matching the scripts' version, with its notes in `docs/releases/`. The release
-workflow checks the version, attaches the two scripts and `SHA256SUMS`, attests them and drafts the release, which a person reads
-and publishes. Run by hand on a branch, it does the checks and stops before the attestation and the release.
+A release of the scripts starts from a signed tag `v<version>` matching the scripts' version, with its notes in `docs/releases/`.
+The release workflow checks the version, attaches the two scripts and `SHA256SUMS`, attests them and drafts the release, which a
+person reads and publishes. Run by hand on a branch, it does the checks and stops before the attestation and the release. The app's
+releases start from a tag `app-v<version>` and have their own workflow ([docs/app.md](docs/app.md#releases)).
 
 ## Licence
 

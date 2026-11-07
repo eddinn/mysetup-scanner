@@ -1,8 +1,8 @@
 name: App
 
 # The Go app (docs/app.md): formatted, vetted for every target, tested, built without C for every target, run on Linux, Windows
-# and macOS runners with its report checked, and built twice to show the same source gives the same bytes. GitHub's runners are
-# virtual machines: a run shows the app starts and prints a valid report there, not that real hardware reads correctly.
+# and macOS runners with its report and its page checked, and built twice to show the same source gives the same bytes. GitHub's
+# runners are virtual machines: a run shows the app starts and gives a valid report there, not that real hardware reads correctly.
 on:
   push:
     paths:
@@ -87,6 +87,28 @@ jobs:
         shell: bash
         run: |
           go build -trimpath -o scan-app.exe ./cmd/mysetup-scan
-          ./scan-app.exe > report.txt
+          ./scan-app.exe --cli > report.txt
           cat report.txt
           python3 -B tests/validate_report.py report.txt || python -B tests/validate_report.py report.txt
+      # The page, as a browser uses it, without opening one: served, its download the same report, another site's Done refused,
+      # and its own Done ending the app.
+      - name: The page on this runner
+        shell: bash
+        run: |
+          ./scan-app.exe --no-browser 2> page.txt &
+          app=$!
+          url=
+          for _ in $(seq 50); do
+            url=$(grep -o 'http://127\.0\.0\.1:[0-9]*/t/[0-9a-f]\{64\}/' page.txt | head -n 1 || true)
+            [ -n "$url" ] && break
+            sleep 0.2
+          done
+          test -n "$url"
+          origin=${url%%/t/*}
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$url")" = 200
+          curl -s "${url}report.txt" | cmp - report.txt
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://attacker.example' "${url}done")" = 403
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Origin: $origin" "${url}done")" = 204
+          for _ in $(seq 25); do kill -0 "$app" 2>/dev/null || break; sleep 0.2; done
+          if kill -0 "$app" 2>/dev/null; then echo "The app did not end after Done."; kill "$app"; exit 1; fi
+          wait "$app"

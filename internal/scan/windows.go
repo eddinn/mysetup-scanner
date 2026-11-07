@@ -58,7 +58,7 @@ func ReadWindows(src WindowsSource) Hardware {
 	default:
 		h.Architecture = "other"
 	}
-	// Tested on a real x86-64 machine, without administrator rights (2026-11-07); see the README.
+	// Tested on a real x86-64 machine, without administrator rights (2026-11-07); see docs/app.md.
 	h.Tested = h.Architecture == "x86-64"
 	table := smbios.Parse(src.Firmware)
 	switch {

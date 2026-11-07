@@ -27,7 +27,7 @@ func ReadLinux(src LinuxSource) Hardware {
 	h := Hardware{Family: "linux", Architecture: NormalArchitecture(src.Machine)}
 	h.Environment = linuxEnvironment(src.FS)
 	h.OSName, h.OSVersion = linuxOS(src.FS)
-	// Tested on real x86-64 machines with udev (2026-11-07); see the README.
+	// Tested on real x86-64 machines with udev (2026-11-07); see docs/app.md.
 	h.Tested = h.Architecture == "x86-64" && exists(src.FS, "run/udev/data")
 	if h.Environment == "wsl" {
 		return h
