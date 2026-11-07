@@ -8,7 +8,8 @@ Tells [MySetup](https://mysetup.is) what hardware your computer has. MySetup off
 | Detail | Least | Full | Full |
 | Best mark | Detected | Detected | Verified |
 
-This repository holds the script, which is ready to try. The app, a Go program, is designed but not built yet.
+This repository holds the script. Its first release is [v0.1.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.1.0)
+(November 2026). The app, a Go program, is designed but not built yet.
 
 ## The script
 
@@ -16,8 +17,8 @@ It prints a text report. You read it, then copy it and paste it on your build pa
 no files, installs nothing and does not ask for root unless you say so. Please read it before you run it; it is meant to be
 read.
 
-Download the file for your system from the [releases](https://github.com/eddinn/mysetup-scanner/releases), or from your build page
-on MySetup, which serves the same files, and run it.
+Download the file for your system from the [latest release](https://github.com/eddinn/mysetup-scanner/releases/latest), or from
+your build page on MySetup, which serves the same files and links to the release of the version it serves, and run it.
 
 **Linux, macOS, the BSDs and other Unix-like systems:**
 
@@ -36,19 +37,20 @@ no setting. On a managed computer, Group Policy may still refuse it.
 
 There is deliberately no pipe-to-shell one-liner: it would skip the reading.
 
+Then copy everything from `mysetup-report 1` to `mysetup-report-end` and paste it in the Hardware section of your build on
+MySetup, where you review every part before anything is saved. The format is in [docs/report-format.md](docs/report-format.md).
+
 ### Check a download
 
-Each release carries `SHA256SUMS` and GitHub's attestation that its files were built from this repository at that tag:
+Each release carries the two scripts, `SHA256SUMS`, and GitHub's attestation that these files were built from this repository at
+that release's tag:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
 gh attestation verify mysetup-scan.sh --repo eddinn/mysetup-scanner
 ```
 
-The scripts are not code-signed yet.
-
-Then copy everything from `mysetup-report 1` to `mysetup-report-end`. The format is in
-[docs/report-format.md](docs/report-format.md).
+MySetup's build page shows each file's SHA-256 too. The scripts are not code-signed yet.
 
 ## Requirements
 
