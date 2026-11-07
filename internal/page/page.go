@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -157,11 +156,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// randomNonce is 128 random bits in hex, which html/template writes into an attribute as it is (base64's "+" would become "&#43;").
 func randomNonce() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 
-	return base64.RawStdEncoding.EncodeToString(b)
+	return hex.EncodeToString(b)
 }
 
 var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>

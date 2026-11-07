@@ -88,20 +88,28 @@ func TestAnotherHostNameIsRefused(t *testing.T) {
 
 func TestThePageIsLockedDownAndEscapesTheReport(t *testing.T) {
 	s, _ := newServer(t, time.Minute, time.Minute)
+	// Many responses, each with its own nonce: a nonce that came out differently in the page only some of the time would show.
+	for range 200 {
+		w := request(s, http.MethodGet, base(s), nil)
+		policy := w.Header().Get("Content-Security-Policy")
+		match := regexp.MustCompile(`script-src 'nonce-([0-9a-f]{32})'; style-src 'nonce-([0-9a-f]{32})'`).FindStringSubmatch(policy)
+		if match == nil || match[1] != match[2] {
+			t.Fatalf("policy %q", policy)
+		}
+		if body := w.Body.String(); strings.Count(body, `nonce="`+match[1]+`"`) != 2 || strings.Count(body, "nonce=") != 2 {
+			t.Fatalf("the style and script do not carry the nonce %s of their response", match[1])
+		}
+	}
 	w := request(s, http.MethodGet, base(s), nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("page: %d", w.Code)
 	}
 	header := w.Header()
 	policy := header.Get("Content-Security-Policy")
-	match := regexp.MustCompile(`script-src 'nonce-([A-Za-z0-9+/]{22})'`).FindStringSubmatch(policy)
-	if match == nil || !strings.HasPrefix(policy, "default-src 'none';") || !strings.Contains(policy, "frame-ancestors 'none'") {
+	if !strings.HasPrefix(policy, "default-src 'none';") || !strings.Contains(policy, "frame-ancestors 'none'") {
 		t.Fatalf("policy %q", policy)
 	}
 	body := w.Body.String()
-	if strings.Count(body, `nonce="`+match[1]+`"`) != 2 || strings.Count(body, "nonce=") != 2 {
-		t.Error("the style and script do not carry this response's nonce")
-	}
 	for name, want := range map[string]string{"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
 		"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Type": "text/html; charset=utf-8"} {
 		if got := header.Get(name); got != want {
