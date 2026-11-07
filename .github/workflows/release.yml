@@ -1,0 +1,62 @@
+name: Release
+
+# A tag v* drafts a release of the scan scripts: the two scripts, SHA256SUMS, and GitHub's attestation that
+# these exact files were built from this repository at that tag. A person reads the draft and publishes it.
+# Run by hand on a branch, it checks and collects the files and stops before the attestation and the release.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: The scripts carry the release's version, and its notes exist
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -n 's/^VERSION=//p' scripts/mysetup-scan.sh)"
+          fi
+          echo "version=$version"
+          grep -qx "VERSION=${version}" scripts/mysetup-scan.sh
+          grep -qx "\$Version = '${version}'" scripts/mysetup-scan.ps1
+          test -s "docs/releases/v${version}.md"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Collect the files and their checksums
+        run: |
+          mkdir dist
+          cp scripts/mysetup-scan.sh scripts/mysetup-scan.ps1 dist/
+          (cd dist && sha256sum mysetup-scan.sh mysetup-scan.ps1 > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+      - name: Attest where the files come from
+        if: github.ref_type == 'tag'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/mysetup-scan.sh
+            dist/mysetup-scan.ps1
+            dist/SHA256SUMS
+
+      - name: Draft the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/mysetup-scan.sh dist/mysetup-scan.ps1 dist/SHA256SUMS \
+            --draft --verify-tag --title "MySetup scan scripts ${GITHUB_REF_NAME}" \
+            --notes-file "docs/releases/v${VERSION}.md"
