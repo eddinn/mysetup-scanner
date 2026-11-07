@@ -3,8 +3,8 @@
 A Go program that reads the same report as the scripts ([report-format.md](report-format.md)), with `source=app/VERSION`, and
 shows it on a page in your own browser, or in the terminal with `--cli`. The design and the operator's decisions are in MySetup's
 `docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is here: reading, and the two front
-ends. The site side (codes, upload, server checks), sending from the page, and code signing come in the next stages. Its first
-test release is `app-v0.1.0-beta.2`.
+ends. The site side (codes, upload, server checks), sending from the page, and code signing come in the next stages. Its current
+test release is `app-v0.1.0-beta.3`.
 
 ## The page and the terminal
 
@@ -21,7 +21,10 @@ administrator. On Linux and the BSDs root can add memory modules (see below), an
 Double-clicked on Windows, Windows opens a console window for the app alone. The app starts again without one and that window
 closes, so only the browser page is left. This works the same in the classic console and in Windows Terminal. If it cannot start
 again, it carries on in the window. Without a console it has nowhere to print, so it reports a problem in a message box. Run with
-`--cli` in a window of its own, it copies the report to the clipboard and waits for Enter before the window closes.
+`--cli` in a window of its own, it copies the report to the clipboard and waits for Enter before the window closes. It counts a
+window as its own only when it is alone on the console and its input and output are that console. Another program that takes
+its output (WSL, or a script redirecting it) may give it a console of its own, but there it never waits: `app-v0.1.0-beta.2`
+waited there for an Enter nobody could see.
 
 The page ends when you click Done, about 90 seconds after its tab closes (the open page checks in every 20 seconds), on Ctrl+C,
 and after 15 minutes at most. The app does not linger.
@@ -78,6 +81,9 @@ The front ends were tried on the same day:
 - On that Windows computer: a double-click closed its window in 0.1 seconds, served the page on 127.0.0.1 a second later, and the
   browser loaded it. With `--no-browser`, the page's download matched `--cli` byte for byte. Another site's Done and a wrong token
   were refused, and the page's own Done ended the app with exit code 0.
+- On that Windows computer, for beta.3, each way of starting `--cli`: from PowerShell and from WSL with its output piped it ended
+  by itself, as it did in a console of its own with its output redirected to a file. In a window of its own it waited for Enter
+  with the report copied.
 - On pve1 over SSH: as root and as `nobody` with no desktop, the app printed the report with its reason, and also with a display but
   no `xdg-open`. With `--no-browser` as `nobody`, it listened on 127.0.0.1 only and refused a wrong token, another site's Done, and
   a rebinding host name. The page's own Done, Ctrl+C and SIGTERM each ended it with exit code 0.
@@ -122,4 +128,4 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflag
 
 `-buildvcs=false` keeps the clone's state out of the file. Since Go 1.24, a build otherwise stamps a version from the nearest tag,
 which a shallow clone does not have. The first test tag, `app-v0.1.0-beta.1`, was built without it and was never published; its
-files rebuild only from a shallow clone. `app-v0.1.0-beta.2` is the first test release.
+files rebuild only from a shallow clone. `app-v0.1.0-beta.2` is the first test release, and `app-v0.1.0-beta.3` replaces it.

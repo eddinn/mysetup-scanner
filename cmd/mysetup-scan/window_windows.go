@@ -62,9 +62,17 @@ func tell(message string) {
 	_, _ = windows.MessageBox(0, text, title, mbOK|mbIconInformation)
 }
 
-// ownWindow is true when Windows opened a console window for this program alone, as on a double-click: the window would close
-// the moment the program ends.
+// ownWindow is true when Windows opened a console window for this program alone, as on a double-click, and the program reads
+// and writes that window: it would close the moment the program ends. Started by another program that takes its input or output
+// (WSL, or a script redirecting it), it is false even when that program gave it a console of its own, so it never waits there
+// for an Enter nobody can see.
 func ownWindow() bool {
+	for _, f := range []*os.File{os.Stdin, os.Stdout} {
+		var mode uint32
+		if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) != nil {
+			return false
+		}
+	}
 	var processes [2]uint32
 	n, _, _ := procGetConsoleProcessList.Call(uintptr(unsafe.Pointer(&processes[0])), 2)
 
