@@ -88,16 +88,42 @@ addresses, and fail if any get through.
 
 ## Development
 
+The scripts need only what they check for themselves. The tests need Python 3 (its standard library only), and the linters
+`shellcheck` and PSScriptAnalyzer (`Install-Module PSScriptAnalyzer -Scope CurrentUser`). The workflow
+[`scripts.yml`](.github/workflows/scripts.yml) runs the same steps on Linux, Windows and macOS for every change to the scripts or
+tests, and on Linux also in containers of eight other distributions.
+
+**Linux, macOS and other Unix-like systems:**
+
 ```sh
-python3 tests/test_scan_sh.py
-python3 tests/validate_report.py report.txt
+shellcheck -s sh scripts/mysetup-scan.sh
+python3 -B tests/test_scan_sh.py
+sh scripts/mysetup-scan.sh > report.txt
+python3 -B tests/validate_report.py report.txt
 ```
+
+`shellcheck` checks the script as POSIX `sh`. `test_scan_sh.py` runs it on made-up computers: fake commands and files whose
+sources are full of planted serial numbers, hostnames and addresses, none of which may reach the report; it runs under every shell
+(dash, bash in POSIX mode, BusyBox sh, zsh, ksh, mksh, yash) and awk it finds. The last two lines scan the computer you are on and
+check its report against [docs/report-format.md](docs/report-format.md); inside WSL the script declines, as it does for members.
+
+**Windows, in PowerShell:**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\test_scan_ps1.ps1
+Invoke-ScriptAnalyzer -Path scripts\mysetup-scan.ps1 -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\test_scan_ps1.ps1 -ReportPath made-up.txt
+python -B tests\validate_report.py made-up.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\mysetup-scan.ps1 | Set-Content -Encoding ascii report.txt
+python -B tests\validate_report.py report.txt
 ```
 
-`tools/measure-matches.php` measures how often real reports match the MySetup catalogue, with the site's own matcher.
+`test_scan_ps1.ps1` does the same with a made-up computer, by standing in for Windows' classes; `-ReportPath` keeps its report for
+the check. The last two lines scan this computer with the members' own command.
+
+`-B` keeps Python from writing bytecode into `tests/`; `report.txt` and `made-up.txt` are ignored by Git.
+
+`tools/measure-matches.php` measures how often real reports' parts match the MySetup catalogue, through the site's own parser and
+matcher; it runs in `php artisan tinker` in a checkout of the site (the file says how).
 
 A release starts from a signed tag `v<version>` matching the scripts' version, with its notes in `docs/releases/`. The release
 workflow checks the version, attaches the two scripts and `SHA256SUMS`, attests them and drafts the release, which a person reads
