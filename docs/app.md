@@ -4,19 +4,31 @@ A Go program that reads the same report as the scripts ([report-format.md](repor
 shows it on a page in your own browser, or in the terminal with `--cli`. The design and the operator's decisions are in MySetup's
 `docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is here: reading, and the two front
 ends. The site side (codes, upload, server checks), sending from the page, and code signing come in the next stages. Its current
-test release is `app-v0.1.0-beta.3`.
+test release is `app-v0.1.0-beta.4`. The member's steps, for each system, are in the [README](../README.md).
 
 ## The page and the terminal
 
 | How it is started | What it does |
 |---|---|
-| Double-clicked, or run with no option | Opens a page in your default browser with the report, and buttons to copy it, save it as a file, and finish |
-| `mysetup-scan --cli` | Prints the report in the terminal: the report on standard output, everything said around it on standard error |
+| Double-clicked, or run with no option | Opens a page in your default browser with the report and six numbered steps to add it to the build: Copy report, open mysetup.is, the build, Scan this computer, paste, Done |
+| `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it, with the same steps, on standard error |
 | `mysetup-scan --no-browser` | Serves the page without opening a browser, and prints its address to open yourself |
-| No browser can be opened | Prints the report in the terminal, and says why: over SSH or with no desktop (no `DISPLAY` or `WAYLAND_DISPLAY`), no `xdg-open`, or run as root or administrator |
+| There is no desktop | Prints the report in the terminal with the steps, and says why: over SSH or with no desktop (no `DISPLAY` or `WAYLAND_DISPLAY`), or no `xdg-open` |
 
-The app never runs a browser as root or administrator, so run that way it keeps to the terminal. On Windows the report needs no
-administrator. On Linux and the BSDs root can add memory modules (see below), and the app says so when it would.
+Run with sudo or as administrator, the page still opens in a browser (the operator's rule, 2026-11-07), but neither the page nor the
+browser ever runs elevated:
+
+- **Linux, the BSDs, macOS:** the app reads first, as root. Then it finds the person who ran sudo, doas, su or pkexec. On Linux that
+  is the first process above the app that holds no root at all, read from `/proc`: sudo itself keeps the person's real user
+  beside root's effective one, with root's group, so it does not count. Elsewhere it is sudo's `SUDO_UID` or doas's `DOAS_USER`.
+  The app gives up root for good to that person's user, group and groups (it checks that root cannot be taken back), then serves
+  the page and starts the browser in that person's desktop with their own environment. A person without a desktop (over SSH) gets
+  the report in the terminal; nobody else's desktop is ever used. Only a desktop that is root's own opens as root.
+- **Windows:** the app starts itself again as the signed-in user, without administrator rights, with the token of the desktop's own
+  shell, and the elevated copy ends. If that cannot be done (UAC turned off, or no shell), it hands the page's address to Explorer,
+  which opens it in the user's browser. The report needs no administrator on Windows.
+
+On Linux and the BSDs root can add memory modules (see below), and the app says so when it would.
 
 Double-clicked on Windows, Windows opens a console window for the app alone. The app starts again without one and that window
 closes, so only the browser page is left. This works the same in the classic console and in Windows Terminal. If it cannot start
@@ -84,6 +96,10 @@ The front ends were tried on the same day:
 - On that Windows computer, for beta.3, each way of starting `--cli`: from PowerShell and from WSL with its output piped it ended
   by itself, as it did in a console of its own with its output redirected to a file. In a window of its own it waited for Enter
   with the report copied.
+- For beta.4, as root under sudo on a Linux desktop (WSL's, through a test, since the app itself declines WSL): the app found
+  the person who ran sudo, gave up root, and opened the page through a stand-in opener that ran as uid and gid 1000 with the
+  person's own groups, desktop and home. That test first caught sudo's root group being taken. Starting again without
+  administrator rights on Windows needs a UAC prompt, so it waits for the operator's own try.
 - On pve1 over SSH: as root and as `nobody` with no desktop, the app printed the report with its reason, and also with a display but
   no `xdg-open`. With `--no-browser` as `nobody`, it listened on 127.0.0.1 only and refused a wrong token, another site's Done, and
   a rebinding host name. The page's own Done, Ctrl+C and SIGTERM each ended it with exit code 0.
@@ -128,4 +144,5 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflag
 
 `-buildvcs=false` keeps the clone's state out of the file. Since Go 1.24, a build otherwise stamps a version from the nearest tag,
 which a shallow clone does not have. The first test tag, `app-v0.1.0-beta.1`, was built without it and was never published; its
-files rebuild only from a shallow clone. `app-v0.1.0-beta.2` is the first test release, and `app-v0.1.0-beta.3` replaces it.
+files rebuild only from a shallow clone (it was deleted on the operator's word). `app-v0.1.0-beta.2` is the first test release,
+`app-v0.1.0-beta.3` replaced it, and `app-v0.1.0-beta.4` replaces that.
