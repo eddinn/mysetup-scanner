@@ -16,7 +16,8 @@ It prints a text report. You read it, then copy it and paste it on your build pa
 no files, installs nothing and does not ask for root unless you say so. Please read it before you run it; it is meant to be
 read.
 
-Download the file for your system and run it. Releases will carry checksums to compare it with.
+Download the file for your system from the [releases](https://github.com/eddinn/mysetup-scanner/releases), or from your build page
+on MySetup, which serves the same files, and run it.
 
 **Linux, macOS, the BSDs and other Unix-like systems:**
 
@@ -34,6 +35,17 @@ Windows blocks unsigned scripts from the internet by default. `-ExecutionPolicy 
 no setting. On a managed computer, Group Policy may still refuse it.
 
 There is deliberately no pipe-to-shell one-liner: it would skip the reading.
+
+### Check a download
+
+Each release carries `SHA256SUMS` and GitHub's attestation that its files were built from this repository at that tag:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing
+gh attestation verify mysetup-scan.sh --repo eddinn/mysetup-scanner
+```
+
+The scripts are not code-signed yet.
 
 Then copy everything from `mysetup-report 1` to `mysetup-report-end`. The format is in
 [docs/report-format.md](docs/report-format.md).
@@ -84,6 +96,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\test_scan_ps1.ps1
 ```
 
 `tools/measure-matches.php` measures how often real reports match the MySetup catalogue, with the site's own matcher.
+
+A release starts from a signed tag `v<version>` matching the scripts' version, with its notes in `docs/releases/`. The release
+workflow checks the version, attaches the two scripts and `SHA256SUMS`, attests them and drafts the release, which a person reads
+and publishes. Run by hand on a branch, it does the checks and stops before the attestation and the release.
 
 ## Licence
 
