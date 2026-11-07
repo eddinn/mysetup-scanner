@@ -3,21 +3,33 @@
 package page
 
 import (
+	"os/exec"
+	"path/filepath"
+
 	"golang.org/x/sys/windows"
 )
 
-// Desktop says whether a browser can be opened here, and why not. Run as administrator, the app does not open a browser: a
-// browser started from it would run as administrator too. On Windows nothing in the report needs administrator anyway.
-func Desktop() (bool, string) {
+// Session is where the page opens. On Windows there is always a desktop. Run as administrator, the app first starts itself again
+// as the signed-in user without administrator rights (the command's unelevate), so the page and the browser run as that user.
+type Session struct{}
+
+// FindSession: on Windows, the signed-in user's desktop.
+func FindSession() (*Session, string) { return &Session{}, "" }
+
+// Leave does nothing on Windows: an elevated app cannot give up its rights in place, so it starts again without them instead.
+func (*Session) Leave() error { return nil }
+
+// Open opens the page in the member's default browser, as Windows opens any web address. Still running as administrator (when
+// starting again without it failed), it hands the address to Explorer, which opens it as the signed-in user, so the browser does
+// not run as administrator.
+func (*Session) Open(url string) error {
 	if windows.GetCurrentProcessToken().IsElevated() {
-		return false, "Run as administrator, the app does not open a browser, and Windows needs no administrator for the report; here it is instead."
+		if folder, err := windows.GetWindowsDirectory(); err == nil {
+			if err := exec.Command(filepath.Join(folder, "explorer.exe"), url).Start(); err == nil {
+				return nil
+			}
+		}
 	}
-
-	return true, ""
-}
-
-// Open opens the page in the member's default browser, as Windows opens any web address.
-func Open(url string) error {
 	verb, _ := windows.UTF16PtrFromString("open")
 	target, err := windows.UTF16PtrFromString(url)
 	if err != nil {

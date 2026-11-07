@@ -21,7 +21,7 @@ func newServer(t *testing.T, life, gone time.Duration) (*Server, net.Listener) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	server, err := New(Content{Version: "0.1.0", Report: madeUpReport, Notes: []string{"A made-up <b>note</b>."}}, listener, life, gone)
+	server, err := New(Content{Version: "0.1.0", Report: madeUpReport, Notes: []string{"A made-up <b>note</b>."}, BuildsURL: "https://mysetup.is/setups"}, listener, life, gone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,6 +124,26 @@ func TestThePageIsLockedDownAndEscapesTheReport(t *testing.T) {
 	}
 	if again := request(s, http.MethodGet, base(s), nil).Header().Get("Content-Security-Policy"); again == policy {
 		t.Error("two responses had the same nonce")
+	}
+}
+
+func TestThePageGivesNumberedStepsAndSaysWhatIsNotBuiltYet(t *testing.T) {
+	s, _ := newServer(t, time.Minute, time.Minute)
+	body := request(s, http.MethodGet, base(s), nil).Body.String()
+	for _, want := range []string{
+		"Add it to your build in 6 steps", `id="copy">Copy report</button>`,
+		`<a class="button secondary" href="https://mysetup.is/setups" target="_blank" rel="noopener noreferrer">Open mysetup.is in a new tab</a>`,
+		`Click your build.`, `"Create setup"`, `Scroll down to "Hardware" and find "Scan this computer".`,
+		`"Paste your report here"`, `Click "Review the report".`, `id="done">Done</button>`,
+		"Coming in a later version: sending the report straight to your build with a code from your build page",
+		"This version cannot send anything.", `href="report.txt" download>Save it as a file</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the page lacks %q", want)
+		}
+	}
+	if strings.Count(body, "<li>") != 6 {
+		t.Errorf("%d steps, want 6", strings.Count(body, "<li>"))
 	}
 }
 

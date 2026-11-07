@@ -25,6 +25,8 @@ type Content struct {
 	Version string
 	Report  string
 	Notes   []string
+	// BuildsURL is where the member finds their builds on MySetup, linked from the steps.
+	BuildsURL string
 }
 
 // Server is one page for one report.
@@ -186,7 +188,16 @@ button, a.button { font: inherit; font-weight: 600; border-radius: .75rem; paddi
 .secondary:hover { border-color: #52525b; }
 pre { background: #18181b; border: 1px solid #27272a; border-radius: .75rem; padding: 1rem; overflow-x: auto; font: 13px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #d4d4d8; }
 .how { color: #a1a1aa; font-size: .95rem; }
-.status { min-height: 1.5rem; color: #6ee7b7; margin: 0 0 1rem; }
+.status { display: block; min-height: 1.5rem; color: #6ee7b7; margin: .4rem 0 0; }
+h2 { font-size: 1.15rem; color: #fff; margin: 1.5rem 0 .75rem; }
+.steps { margin: 0 0 1.25rem; padding-left: 1.6rem; }
+.steps li { margin: 0 0 1.1rem; padding-left: .25rem; }
+.step { font-weight: 600; color: #fff; }
+.hint { display: block; color: #a1a1aa; font-size: .95rem; margin-top: .3rem; }
+kbd { font: 13px ui-monospace, Consolas, monospace; border: 1px solid #3f3f46; border-radius: .3rem; padding: .05rem .35rem; background: #18181b; }
+.later { border: 1px solid #3730a3; background: #1e1b4b66; color: #c7d2fe; border-radius: .75rem; padding: .75rem 1rem; margin: 0 0 1.25rem; }
+details { margin: 0 0 1.25rem; } summary { cursor: pointer; color: #a5b4fc; font-weight: 600; }
+.steps .button, .steps button { margin-top: .4rem; display: inline-block; }
 </style>
 </head>
 <body>
@@ -194,27 +205,39 @@ pre { background: #18181b; border: 1px solid #27272a; border-radius: .75rem; pad
 <h1>MySetup scan</h1>
 <p class="lead">Your computer's hardware report, read on this computer just now. Nothing has been sent anywhere.</p>
 {{if .Notes}}<div class="notes" role="note">{{range .Notes}}<p>{{.}}</p>{{end}}</div>{{end}}
-<div class="actions">
-<button type="button" class="primary" id="copy">Copy report</button>
-<a class="button secondary" href="report.txt" download>Save as file</a>
-<button type="button" class="secondary" id="done">Done</button>
-</div>
-<p class="status" id="status" role="status" aria-live="polite"></p>
-<p class="how">Paste it in the Hardware section of your build on MySetup, under "Scan this computer". You review every part there
-before anything is saved.</p>
+<h2>Add it to your build in 6 steps</h2>
+<ol class="steps">
+<li><span class="step">Click this button:</span> <button type="button" class="primary" id="copy">Copy report</button>
+<span class="status" id="status" role="status" aria-live="polite"></span></li>
+<li><span class="step">Open your builds on MySetup:</span> <a class="button secondary" href="{{.BuildsURL}}" target="_blank" rel="noopener noreferrer">Open mysetup.is in a new tab</a>
+<span class="hint">Sign in if it asks.</span></li>
+<li><span class="step">Click your build.</span> <span class="hint">No build yet? Click "Create setup" first.</span></li>
+<li><span class="step">Scroll down to "Hardware" and find "Scan this computer".</span> Click in the box "Paste your report here", then
+paste: press <kbd>Ctrl</kbd>+<kbd>V</kbd> (on a Mac <kbd>Cmd</kbd>+<kbd>V</kbd>).</li>
+<li><span class="step">Click "Review the report".</span> Check each part, then click "Add these parts". Nothing changes in your build
+until you do.</li>
+<li><span class="step">Come back to this tab and click:</span> <button type="button" class="secondary" id="done">Done</button></li>
+</ol>
+<p class="later">Coming in a later version: sending the report straight to your build with a code from your build page, without copying
+and pasting. This version cannot send anything.</p>
+<details>
+<summary>See the report</summary>
 <pre id="report">{{.Report}}</pre>
-<p class="how">MySetup scan {{.Version}}. This page runs on your own computer, and the app stops when you click Done, close this
-tab, or after 15 minutes.</p>
+<p><a class="button secondary" href="report.txt" download>Save it as a file</a></p>
+</details>
+<p class="how">MySetup scan {{.Version}}. This page is served by the app on your own computer only. The app stops when you click
+Done, close this tab, or after 15 minutes.</p>
 </main>
 <script nonce="{{.Nonce}}">
 const status = document.getElementById('status');
 document.getElementById('copy').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(document.getElementById('report').textContent);
-    status.textContent = 'Copied. Paste it on your build page.';
+    status.textContent = 'Copied. Now do step 2.';
   } catch (e) {
+    document.querySelector('details').open = true;
     getSelection().selectAllChildren(document.getElementById('report'));
-    status.textContent = 'Your browser did not allow copying: the report is selected, so copy it with Ctrl+C or Cmd+C.';
+    status.textContent = 'Your browser did not let this button copy. The report below is now selected: press Ctrl+C (on a Mac Cmd+C) to copy it, then do step 2.';
   }
 });
 // While this tab is open, it tells the app so; once it closes, the app stops by itself.
@@ -222,7 +245,8 @@ const alive = setInterval(() => fetch('alive').catch(() => {}), 20000);
 document.getElementById('done').addEventListener('click', async () => {
   clearInterval(alive);
   try { await fetch('done', {method: 'POST'}); } catch (e) {}
-  status.textContent = 'Finished. You can close this tab.';
+  status.textContent = '';
+  document.getElementById('done').insertAdjacentText('afterend', ' Finished. The app has stopped, and you can close this tab.');
   for (const b of document.querySelectorAll('button')) b.disabled = true;
 });
 </script>

@@ -28,7 +28,85 @@ var (
 	procEmptyClipboard        = user32.NewProc("EmptyClipboard")
 	procSetClipboardData      = user32.NewProc("SetClipboardData")
 	procCloseClipboard        = user32.NewProc("CloseClipboard")
+	procGetShellWindow        = user32.NewProc("GetShellWindow")
+	procFreeConsole           = kernel32.NewProc("FreeConsole")
+	advapi32                  = windows.NewLazySystemDLL("advapi32.dll")
+	procCreateProcessWithTokW = advapi32.NewProc("CreateProcessWithTokenW")
 )
+
+// unelevate, run as administrator, starts the app again as the signed-in user without administrator rights, with the token of the
+// desktop's own shell (Explorer), and tells this one to end, so the page and the browser run as that user: Windows needs no
+// administrator for the report. With UAC off the shell is elevated too, and with no shell there is nobody to start it as; then
+// the app goes on as it is, and opens the browser through Explorer (page.Session.Open).
+func unelevate() bool {
+	if !windows.GetCurrentProcessToken().IsElevated() {
+		return false
+	}
+	shell, _, _ := procGetShellWindow.Call()
+	if shell == 0 {
+		return false
+	}
+	var pid uint32
+	if _, err := windows.GetWindowThreadProcessId(windows.HWND(shell), &pid); err != nil || pid == 0 {
+		return false
+	}
+	process, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = windows.CloseHandle(process) }()
+	var token windows.Token
+	if windows.OpenProcessToken(process, windows.TOKEN_DUPLICATE, &token) != nil {
+		return false
+	}
+	defer func() { _ = token.Close() }()
+	var primary windows.Token
+	access := uint32(windows.TOKEN_QUERY | windows.TOKEN_DUPLICATE | windows.TOKEN_ASSIGN_PRIMARY | windows.TOKEN_ADJUST_DEFAULT | windows.TOKEN_ADJUST_SESSIONID)
+	if windows.DuplicateTokenEx(token, access, nil, windows.SecurityImpersonation, windows.TokenPrimary, &primary) != nil {
+		return false
+	}
+	defer func() { _ = primary.Close() }()
+	if primary.IsElevated() {
+		return false
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	app, err := windows.UTF16PtrFromString(self)
+	if err != nil {
+		return false
+	}
+	// Without a console of its own, or, where Windows does not allow that here, with one that is never shown.
+	for _, flags := range []uint32{windows.DETACHED_PROCESS, windows.CREATE_NEW_CONSOLE} {
+		line, err := windows.UTF16FromString(windows.EscapeArg(self) + " --detached")
+		if err != nil {
+			return false
+		}
+		startup := windows.StartupInfo{Flags: windows.STARTF_USESHOWWINDOW, ShowWindow: windows.SW_HIDE}
+		startup.Cb = uint32(unsafe.Sizeof(startup))
+		var started windows.ProcessInformation
+		ok, _, _ := procCreateProcessWithTokW.Call(uintptr(primary), 0, uintptr(unsafe.Pointer(app)), uintptr(unsafe.Pointer(&line[0])),
+			uintptr(flags), 0, 0, uintptr(unsafe.Pointer(&startup)), uintptr(unsafe.Pointer(&started)))
+		if ok != 0 {
+			_ = windows.CloseHandle(started.Thread)
+			_ = windows.CloseHandle(started.Process)
+
+			return true
+		}
+	}
+
+	return false
+}
+
+// leaveOwnConsole, in the app started again by detach or unelevate, lets go of a console Windows gave it alone, so no window
+// stays behind the page.
+func leaveOwnConsole() {
+	var processes [2]uint32
+	if n, _, _ := procGetConsoleProcessList.Call(uintptr(unsafe.Pointer(&processes[0])), 2); n == 1 {
+		procFreeConsole.Call()
+	}
+}
 
 // detach, in a console window Windows opened for the app alone (a double-click), starts the app again without a console and
 // tells this one to end, so the window closes and only the browser page is left. It works the same in the classic console and
@@ -119,10 +197,10 @@ func keepWindowOpen(report string, stderr io.Writer) {
 	}
 	fmt.Fprintln(stderr)
 	if copyToClipboard(report) {
-		fmt.Fprintln(stderr, "The report is copied: paste it on your build page.")
+		fmt.Fprintln(stderr, "The report is already copied for you, so you can skip step 1.")
 	} else {
-		fmt.Fprintln(stderr, `Select the report from "mysetup-report 1" to "mysetup-report-end" and copy it.`)
+		fmt.Fprintln(stderr, "The report could not be copied for you, so do step 1 yourself.")
 	}
-	fmt.Fprintln(stderr, "Press Enter to close this window.")
+	fmt.Fprintln(stderr, "When you have pasted it on your build page, press Enter here to close this window.")
 	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 }
