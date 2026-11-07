@@ -2,3 +2,8 @@
 report.txt
 made-up.txt
 __pycache__/
+# The app's builds and the reports scanned while developing it.
+/scan-app.exe
+/mysetup-scan
+/mysetup-scan.exe
+/dist/

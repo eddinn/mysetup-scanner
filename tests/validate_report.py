@@ -13,7 +13,7 @@ PCI = r"[0-9a-f]{4}:[0-9a-f]{4}"
 CAPABILITIES = "cpu|gpu|motherboard|memory_modules|configured_memory|storage|displays"
 
 FIELDS: list[tuple[str, str]] = [
-    (r"source", r"script-(sh|ps1)/[0-9]+\.[0-9]+\.[0-9]+"),
+    (r"source", r"(script-(sh|ps1)|app)/[0-9]+\.[0-9]+\.[0-9]+"),
     (r"tested", r"yes|no"),
     (r"os\.family", r"linux|macos|windows|freebsd|openbsd|netbsd|illumos|other"),
     (r"os\.name", WORD),

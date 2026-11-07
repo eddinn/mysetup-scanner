@@ -9,7 +9,8 @@ Tells [MySetup](https://mysetup.is) what hardware your computer has. MySetup off
 | Best mark | Detected | Detected | Verified |
 
 This repository holds the script. Its first release is [v0.1.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.1.0)
-(November 2026). The app, a Go program, is designed but not built yet.
+(November 2026). The app, a Go program, is being built in stages: stage 1 reads the hardware and prints the same report; see
+[docs/app.md](docs/app.md). It is not released yet.
 
 ## The script
 
@@ -121,6 +122,8 @@ python -B tests\validate_report.py report.txt
 the check. The last two lines scan this computer with the members' own command.
 
 `-B` keeps Python from writing bytecode into `tests/`; `report.txt` and `made-up.txt` are ignored by Git.
+
+The app has its own steps in [docs/app.md](docs/app.md#build-and-test).
 
 `tools/measure-matches.php` measures how often real reports' parts match the MySetup catalogue, through the site's own parser and
 matcher; it runs in `php artisan tinker` in a checkout of the site (the file says how).
