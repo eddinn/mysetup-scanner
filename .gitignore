@@ -1,0 +1,4 @@
+# What the development steps in README.md write: the reports they scan and check, and Python's bytecode.
+report.txt
+made-up.txt
+__pycache__/
