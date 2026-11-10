@@ -1,6 +1,6 @@
 # Report format, version 1
 
-What `scripts/mysetup-scan.sh` and `scripts/mysetup-scan.ps1` print. The member pastes it on their MySetup build page, so
+What `scripts/mysetup-scan.sh`, `scripts/mysetup-scan.ps1` and the app (`cmd/mysetup-scan`) print. The member pastes it on their MySetup build page, so
 it is plain text a person can read before sending. `tests/validate_report.py` checks a report against this page.
 
 ```
@@ -62,7 +62,7 @@ The values above are made up.
 
 | Field | Value |
 |---|---|
-| `source` | `script-sh/VERSION` or `script-ps1/VERSION` |
+| `source` | `script-sh/VERSION`, `script-ps1/VERSION`, or `app/VERSION` for the app |
 | `tested` | `yes` once a real machine of this system has passed, otherwise `no` |
 | `os.family` | `linux`, `macos`, `windows`, `freebsd`, `openbsd`, `netbsd`, `illumos` or `other` |
 | `os.name` | The distribution or system, such as `debian`; a word |
@@ -101,7 +101,7 @@ The values above are made up.
 Usernames, hostnames, IP or MAC addresses, motherboard or system UUIDs, machine GUIDs, Windows SIDs, product keys, disk
 serial numbers, file paths, file names, network names, browser identifiers or other software (ADR-005).
 
-Both scripts read their sources by exact key, and print only through one function that names every field. As a second
+The scripts and the app read their sources by exact key, and print only through one function that names every field. As a second
 boundary, that function drops a value shaped like a MAC or IP address, a UUID, an email address or a home directory. The
 server is the third, and treats a report as untrusted: anyone can edit it, which is why a script's parts are Detected at
 most.
