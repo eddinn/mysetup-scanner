@@ -129,6 +129,9 @@ func detach() bool {
 	return true
 }
 
+// startedWithoutTerminal is the Windows app's own business: double-clicked, it starts again without a console (detach).
+func startedWithoutTerminal() bool { return false }
+
 // tell shows a message in a box of its own, for the app started again without a console (detach), which has nowhere else to say it.
 func tell(message string) {
 	const mbOK, mbIconInformation = 0x0, 0x40

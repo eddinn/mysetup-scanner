@@ -4,7 +4,8 @@ A Go program that reads the same report as the scripts ([report-format.md](repor
 shows it on a page in your own browser, or in the terminal with `--cli`. The design and the operator's decisions are in MySetup's
 `docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is here: reading, and the two front
 ends. The site side (codes, upload, server checks), sending from the page, and code signing come in the next stages. Its current
-test release is `app-v0.1.0-beta.4`. The member's steps, for each system, are in the [README](../README.md).
+release candidate is `app-v0.1.0-rc.1`. The member's steps, for each system and both ways of starting it (double-click, or a
+terminal with `--cli`), are in the [README](../README.md).
 
 ## The page and the terminal
 
@@ -14,6 +15,7 @@ test release is `app-v0.1.0-beta.4`. The member's steps, for each system, are in
 | `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it, with the same steps, on standard error |
 | `mysetup-scan --no-browser` | Serves the page without opening a browser, and prints its address to open yourself |
 | There is no desktop | Prints the report in the terminal with the steps, and says why: over SSH or with no desktop (no `DISPLAY` or `WAYLAND_DISPLAY`), or no `xdg-open` |
+| Double-clicked on Linux or another Unix-like system | As with no option. It has no terminal to print to, so what goes wrong is said in the desktop's own message box |
 
 Run with sudo or as administrator, the page still opens in a browser (the operator's rule, 2026-11-07), but neither the page nor the
 browser ever runs elevated:
@@ -29,6 +31,12 @@ browser ever runs elevated:
   which opens it in the user's browser. The report needs no administrator on Windows.
 
 On Linux and the BSDs root can add memory modules (see below), and the app says so when it would.
+
+Started with no terminal on Linux and the other Unix-like systems (a double-click in a file manager), the app finds that its
+error output is not a terminal. It then says what goes wrong in the desktop's own message box, with the first of GNOME's
+`zenity`, KDE's `kdialog` or a `notify-send` notification that works, taken only from `/usr/bin`, `/usr/local/bin` or `/bin` and
+never started as root. None of them is required; with none, the message goes where the error output goes, as before. It says so when it could not give up root, its page could not start, the browser did not open
+(with the page's address to open), it found no desktop to open the page in (with the `--cli` way), or it is in WSL.
 
 Double-clicked on Windows, Windows opens a console window for the app alone. The app starts again without one and that window
 closes, so only the browser page is left. This works the same in the classic console and in Windows Terminal. If it cannot start
@@ -73,7 +81,8 @@ root would read.
 
 A system's own tool is run only from `/usr/sbin`, `/usr/bin`, `/sbin` or `/bin`, never found through `PATH`, with fixed arguments,
 no shell, a time limit and a size limit on what it prints. The browser opener is the system's own too: `ShellExecute` on Windows,
-`/usr/bin/open` on macOS, and `xdg-open` from `/usr/bin`, `/usr/local/bin` or `/bin` elsewhere. Sources that also hold serial
+`/usr/bin/open` on macOS, and `xdg-open` from `/usr/bin`, `/usr/local/bin` or `/bin` elsewhere, as are the message tools for a
+start with no terminal. Sources that also hold serial
 numbers (udev, the firmware table, the disk descriptors, `system_profiler`, `geom`) are read by exact key or offset. The report is
 written through one function that names every field ([internal/report](../internal/report/report.go)), as in the scripts.
 
@@ -104,8 +113,18 @@ The front ends were tried on the same day:
   no `xdg-open`. With `--no-browser` as `nobody`, it listened on 127.0.0.1 only and refused a wrong token, another site's Done, and
   a rebinding host name. The page's own Done, Ctrl+C and SIGTERM each ended it with exit code 0.
 
-The other systems are built and vetted for every target, and run on GitHub's macOS runner, but no real machine of them has passed
-yet. The paths that need root (the firmware table on Linux without udev, `/dev/mem` on FreeBSD) are tested on a made-up table only.
+On 2026-11-11 the release candidate `0.1.0-rc.1`, built by `tools/build-release.sh`, ran on five real machines:
+
+- Linux x86-64, Debian 13 with udev, four servers (pve0, pve1, pve2 and the backup server pbs, with Intel Core i5-13600K,
+  i7-7700K, Core Ultra 9 285H and i7 950 processors): the `.tar.gz` extracted with the program still executable, and the reports were valid with `--cli` as an ordinary
+  user and as root, and started with no terminal and no desktop, which printed the report with its reason. Each ended with exit
+  code 0.
+- Windows 11 x86-64 (the computer above, Windows build 26300): `--version` and `--cli` gave a valid report, exit code 0. The
+  Windows app works as beta.4 did; only its version changed.
+
+A double-click on a Linux desktop (a file manager starting the extracted program) has not been tried on a real machine yet; the
+operator's Ubuntu 26.04 laptop is next. The other systems are built and vetted for every target, and run on GitHub's macOS
+runner, but no real machine of them has passed yet. The paths that need root (the firmware table on Linux without udev, `/dev/mem` on FreeBSD) are tested on a made-up table only.
 
 ## Build and test
 
@@ -121,9 +140,11 @@ python3 -B tests/validate_report.py report.txt
 ```
 
 The last line opens the page. For another system, set `GOOS` and `GOARCH`, such as `GOOS=windows GOARCH=amd64` for
-`mysetup-scan.exe`. Two workflows check every change. On MySetup's own Git server and its Linux runner,
-[`.forgejo/workflows/app.yml`](../.forgejo/workflows/app.yml) vets every target, builds every target twice and fails if the bytes
-differ, and keeps the builds as a workflow artifact for 14 days. On GitHub, the mirror that receives every push,
+`mysetup-scan.exe`. `tools/build-release.sh dist` builds the downloads exactly as a release does (see Releases). Two workflows check
+every change. On MySetup's own Git server and its Linux runner, [`.forgejo/workflows/app.yml`](../.forgejo/workflows/app.yml) vets
+every target and builds every target twice, failing if the bytes differ. It lints and runs `tools/build-release.sh`, checks the
+Linux `.tar.gz` as a member extracts it (one folder, the program executable, its version, a valid report), and keeps the downloads
+as a workflow artifact for 14 days. On GitHub, the mirror that receives every push,
 [`.github/workflows/app.yml`](../.github/workflows/app.yml) covers Windows and macOS, which that server has no runners for. On
 each of the three systems the tests run, the app runs with `--cli` and its report is checked, and the page is served with
 `--no-browser` and checked as a browser would use it: the download matches the report, another site's Done is refused, and the
@@ -131,21 +152,37 @@ page's own Done ends the app.
 
 ## Releases
 
-A release starts from a signed tag `app-v<version>`, such as `app-v0.1.0-beta.1`, matching `Version` and `Prerelease` in
+A release starts from a signed tag `app-v<version>`, such as `app-v0.1.0-rc.1`, matching `Version` and `Prerelease` in
 [internal/scan/hardware.go](../internal/scan/hardware.go), with its notes in `docs/releases/`. The workflow
-[`app-release.yml`](../.github/workflows/app-release.yml) checks the version. It builds Windows and Linux for x86-64 and ARM
-twice and fails if the bytes differ. It attaches the four files and `SHA256SUMS`, attests them, and drafts the release, which a
-person reads and publishes. A tag with a pre-release part, such as `-beta.1`, becomes a pre-release, which never takes the
-repository's "latest release" from the scripts. The app is not code-signed yet, so Windows SmartScreen warns about it.
+[`app-release.yml`](../.github/workflows/app-release.yml) checks the version and runs
+[`tools/build-release.sh`](../tools/build-release.sh), which the homelab's CI also runs for every push. That script builds Windows
+and Linux for x86-64 and ARM twice and fails if the bytes differ. Windows gets the program itself
+(`mysetup-scan-windows-x86-64.exe`). Linux gets a `.tar.gz` (`mysetup-scan-linux-x86-64.tar.gz`) holding one folder with the program
+`mysetup-scan`, already executable, and a short `README.txt`. A browser download never keeps the permission to run, but an
+extracted archive does, so the program can be double-clicked. The workflow attaches the four files and `SHA256SUMS`, attests them,
+and drafts the release, which a person reads and publishes. A tag with a pre-release part, such as `-rc.1`, becomes a pre-release,
+which never takes the repository's "latest release" from the scripts. The app is not code-signed yet (the operator's decision of
+2026-11-11: unsigned until stage 2 is stable), so Windows SmartScreen warns about it.
 
-Anyone can rebuild a release and compare the bytes. Use the Go version in `go.mod` (1.27.3) and the release's tag, from any kind
-of clone or a source archive:
+Anyone can rebuild a release and compare the bytes. Use the Go version in `go.mod` (1.27.3), bash, GNU tar and gzip, and the
+release's tag, from a clone of any depth:
 
 ```sh
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o mysetup-scan-linux-x86-64 ./cmd/mysetup-scan
+git checkout app-v0.1.0-rc.1
+tools/build-release.sh dist
+cat dist/SHA256SUMS
+```
+
+The archives' file times are the commit's, so the `.tar.gz` files are the same bytes too. A source archive has no Git history to
+take that time from; GitHub's `.tar.gz` source archive keeps the commit's time as its files' times, so from it run
+`SOURCE_DATE_EPOCH=$(stat -c %Y go.mod) tools/build-release.sh dist`. One program alone builds with:
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o mysetup-scan ./cmd/mysetup-scan
 ```
 
 `-buildvcs=false` keeps the clone's state out of the file. Since Go 1.24, a build otherwise stamps a version from the nearest tag,
 which a shallow clone does not have. The first test tag, `app-v0.1.0-beta.1`, was built without it and was never published; its
 files rebuild only from a shallow clone (it was deleted on the operator's word). `app-v0.1.0-beta.2` is the first test release,
-`app-v0.1.0-beta.3` replaced it, and `app-v0.1.0-beta.4` replaces that.
+`app-v0.1.0-beta.3` and `app-v0.1.0-beta.4` replaced it in turn, and `app-v0.1.0-rc.1`, the first with the Linux `.tar.gz`, is
+the release candidate for the stable `0.1.0`.

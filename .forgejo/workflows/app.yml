@@ -13,6 +13,7 @@ on:
       - go.mod
       - go.sum
       - tests/validate_report.py
+      - tools/build-release.sh
       - .forgejo/workflows/app.yml
   pull_request:
 
@@ -48,26 +49,50 @@ jobs:
       - name: Made-up computers
         run: go test -count=1 ./...
       # -buildvcs=false, as the release builds: the bytes depend on the source and Go's version alone, not on the clone's tags or
-      # state. Built outside the checkout, which the last check keeps clean.
-      - name: The same source gives the same bytes
-        working-directory: ${{ github.workspace }}
+      # state. Every target the app supports, the ones not published too; built outside the checkout, which the last check keeps
+      # clean.
+      - name: The same source gives the same bytes, on every system
         run: |
-          cd "$RUNNER_TEMP" && mkdir -p a b dist && cd "$GITHUB_WORKSPACE"
-          a="$RUNNER_TEMP/a" b="$RUNNER_TEMP/b" dist="$RUNNER_TEMP/dist"
-          for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 freebsd/amd64 openbsd/amd64 netbsd/amd64 illumos/amd64; do
-            os=${target%/*}; arch=${target#*/}; ext=; [ "$os" = windows ] && ext=.exe
-            name=mysetup-scan-$os-$arch$ext
-            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$a/$name" ./cmd/mysetup-scan
-            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$b/$name" ./cmd/mysetup-scan
-            cmp "$a/$name" "$b/$name"
-            cp "$a/$name" "$dist/"
+          mkdir -p "$RUNNER_TEMP/a" "$RUNNER_TEMP/b"
+          for target in darwin/amd64 darwin/arm64 freebsd/amd64 openbsd/amd64 netbsd/amd64 illumos/amd64; do
+            os=${target%/*}; arch=${target#*/}
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/a/$os-$arch" ./cmd/mysetup-scan
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/b/$os-$arch" ./cmd/mysetup-scan
+            cmp "$RUNNER_TEMP/a/$os-$arch" "$RUNNER_TEMP/b/$os-$arch"
           done
+      - name: The release build script, linted
+        run: |
+          command -v shellcheck >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck; }
+          shellcheck tools/build-release.sh
+      # The downloads exactly as a release publishes them (tools/build-release.sh, which GitHub's release workflow runs too):
+      # Windows and Linux, each built twice and refused if the bytes differ, Linux as its .tar.gz.
+      - name: The downloads, as a release builds them
+        run: |
+          tools/build-release.sh "$RUNNER_TEMP/dist"
           test -z "$(git status --porcelain)"
-          (cd "$dist" && sha256sum * | tee SHA256SUMS)
+      # A browser download loses the executable permission; the .tar.gz keeps it. Extracted as a member would, the program is
+      # executable, says its version and gives a valid report.
+      - name: The Linux download works as extracted
+        run: |
+          version=$(sed -n 's/^const Version = "\(.*\)"$/\1/p' internal/scan/hardware.go)
+          pre=$(sed -n 's/^const Prerelease = "\(.*\)"$/\1/p' internal/scan/hardware.go)
+          mkdir "$RUNNER_TEMP/extract" && cd "$RUNNER_TEMP/extract"
+          archive="$RUNNER_TEMP/dist/mysetup-scan-linux-x86-64.tar.gz"
+          tar --numeric-owner -tvzf "$archive" | awk '{print $1, $2, $6}' | LC_ALL=C sort > listing.txt
+          cat listing.txt
+          printf '%s\n' 'drwxr-xr-x 0/0 mysetup-scan-linux-x86-64/' \
+            '-rw-r--r-- 0/0 mysetup-scan-linux-x86-64/README.txt' \
+            '-rwxr-xr-x 0/0 mysetup-scan-linux-x86-64/mysetup-scan' | LC_ALL=C sort | diff - listing.txt
+          tar -xzf "$archive"
+          test -x mysetup-scan-linux-x86-64/mysetup-scan
+          mysetup-scan-linux-x86-64/mysetup-scan --version | tee version.txt
+          grep -q "${version}${pre:+-$pre}" version.txt
+          mysetup-scan-linux-x86-64/mysetup-scan --cli > report.txt
+          python3 -B "$GITHUB_WORKSPACE/tests/validate_report.py" report.txt
       # Forgejo's own artifact action: GitHub's refuses any server that is not github.com.
-      - uses: forgejo/upload-artifact@v4
+      - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
         with:
-          name: mysetup-scan-stage-1
+          name: mysetup-scan-downloads
           path: ${{ runner.temp }}/dist/
           retention-days: 14
 
