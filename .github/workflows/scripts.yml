@@ -1,8 +1,8 @@
 name: Scan scripts
 
-# What needs GitHub: the script in containers of other distributions (jobs on the homelab's runner have no Docker), and the
-# Windows and macOS runs. The lint, the tests and the run on Linux are .forgejo/workflows/scripts.yml, on the homelab's own
-# runner; GitHub is a mirror of that Forgejo.
+# What needs GitHub: the Windows and macOS runs, which the homelab's runner cannot do. The lint, the tests, the run on Linux
+# and the runs in eight other distributions' containers are .forgejo/workflows/scripts.yml, on the homelab's own runner;
+# GitHub is a mirror of that Forgejo.
 on:
   push:
     paths:
@@ -19,32 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  distributions:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Real tools of other distributions. A container is not a real machine: this shows the script
-      # runs and its report is valid there, not that real hardware reads correctly.
-      - name: Other distributions
-        run: |
-          for image in alpine:3.20 debian:12-slim ubuntu:24.04 fedora:41 rockylinux:9-minimal archlinux:base \
-            opensuse/leap:15.6 ghcr.io/void-linux/void-musl:latest; do
-            echo "::group::$image"
-            status=0
-            docker run --rm -i "$image" sh -s < scripts/mysetup-scan.sh > report.txt || status=$?
-            cat report.txt
-            if [ "$status" -eq 3 ]; then
-              echo "This image has no awk: the script said so."
-            elif [ "$status" -ne 0 ]; then
-              echo "::error::$image exited with $status"
-              exit 1
-            else
-              python3 -B tests/validate_report.py report.txt
-            fi
-            echo "::endgroup::"
-          done
-
   windows:
     runs-on: windows-2025
     timeout-minutes: 10
