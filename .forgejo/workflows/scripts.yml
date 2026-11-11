@@ -1,8 +1,8 @@
 name: Scan scripts
 
-# The scan scripts on the homelab's Forgejo and its Linux runner: the shell script linted, tested and run. Jobs there have no
-# Docker and there are no Windows or macOS runners, so the other distributions' containers and the Windows and macOS runs are
-# GitHub's (.github/workflows/scripts.yml), which gets every push through the mirror. A failed run emails whoever pushed.
+# The scan scripts on the homelab's Forgejo and its Linux runner: the shell script linted, tested and run, and run in eight
+# other distributions' containers. There are no Windows or macOS runners here, so those runs are GitHub's
+# (.github/workflows/scripts.yml), which gets every push through the mirror. A failed run emails whoever pushed.
 on:
   push:
     paths:
@@ -34,3 +34,70 @@ jobs:
           sh scripts/mysetup-scan.sh > report.txt
           cat report.txt
           python3 -B tests/validate_report.py report.txt
+
+  # Real tools of other distributions: the runner starts each distribution's image as a step, with this job's files, so
+  # the job itself needs no Docker. A container is not a real machine: this shows the script runs and its report is valid
+  # there, not that real hardware reads correctly.
+  distributions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Alpine 3.20
+        uses: docker://alpine:3.20
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-alpine.txt; echo $? > distro-alpine.status"
+      - name: Debian 12
+        uses: docker://debian:12-slim
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-debian.txt; echo $? > distro-debian.status"
+      - name: Ubuntu 24.04
+        uses: docker://ubuntu:24.04
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-ubuntu.txt; echo $? > distro-ubuntu.status"
+      - name: Fedora 41
+        uses: docker://fedora:41
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-fedora.txt; echo $? > distro-fedora.status"
+      - name: Rocky Linux 9
+        uses: docker://rockylinux:9-minimal
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-rocky.txt; echo $? > distro-rocky.status"
+      - name: Arch Linux
+        uses: docker://archlinux:base
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-arch.txt; echo $? > distro-arch.status"
+      - name: openSUSE Leap 15.6
+        uses: docker://opensuse/leap:15.6
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-opensuse.txt; echo $? > distro-opensuse.status"
+      - name: Void Linux (musl)
+        uses: docker://ghcr.io/void-linux/void-musl:latest
+        with:
+          entrypoint: /bin/sh
+          args: -c "sh scripts/mysetup-scan.sh > distro-void.txt; echo $? > distro-void.status"
+      - name: Every distribution's report
+        run: |
+          failed=0
+          for status in distro-*.status; do
+            name=${status%.status}; code=$(cat "$status")
+            echo "::group::${name#distro-} (exit $code)"
+            cat "$name.txt"
+            if [ "$code" -eq 3 ]; then
+              echo "This image has no awk: the script said so."
+            elif [ "$code" -ne 0 ]; then
+              echo "::error::${name#distro-} exited with $code"; failed=1
+            else
+              python3 -B tests/validate_report.py "$name.txt" || failed=1
+            fi
+            echo "::endgroup::"
+          done
+          test "$(ls distro-*.status | wc -l)" -eq 8
+          exit $failed
