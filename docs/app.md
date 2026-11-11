@@ -143,10 +143,13 @@ The last line opens the page. For another system, set `GOOS` and `GOARCH`, such 
 `mysetup-scan.exe`. `tools/build-release.sh dist` builds the downloads exactly as a release does (see Releases). Two workflows check
 every change. On MySetup's own Git server and its Linux runner, [`.forgejo/workflows/app.yml`](../.forgejo/workflows/app.yml) vets
 every target and builds every target twice, failing if the bytes differ. It lints and runs `tools/build-release.sh`, checks the
-Linux `.tar.gz` as a member extracts it (one folder, the program executable, its version, a valid report), and keeps the downloads
-as a workflow artifact for 14 days. On GitHub, the mirror that receives every push,
-[`.github/workflows/app.yml`](../.github/workflows/app.yml) covers Windows and macOS, which that server has no runners for. On
-each of the three systems the tests run, the app runs with `--cli` and its report is checked, and the page is served with
+Linux x86-64 `.tar.gz` as a member extracts it with `tools/check-linux-download.sh` (one folder, the program executable, its
+version, a valid report), and keeps the downloads as a workflow artifact for 14 days. On GitHub, the mirror that receives every
+push, [`.github/workflows/app.yml`](../.github/workflows/app.yml) covers what that server has no runners for: Windows and macOS,
+and Windows and Linux on ARM processors, where it also checks the arm64 `.tar.gz` as extracted. GitHub's ARM runners are free
+for public repositories; like its others they are virtual machines, so they show the ARM programs run and give valid reports,
+not that real ARM hardware reads correctly. On each system the tests run, the app runs with `--cli` and its report is checked,
+and the page is served with
 `--no-browser` and checked as a browser would use it: the download matches the report, another site's Done is refused, and the
 page's own Done ends the app.
 

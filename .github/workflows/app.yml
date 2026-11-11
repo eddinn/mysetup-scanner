@@ -1,9 +1,11 @@
 name: App
 
-# The Go app (docs/app.md) on GitHub's Windows and macOS runners, which the homelab's Forgejo has none of: tested and run with
-# its report and its page checked. Everything else (formatting, vetting and building every target, the same bytes twice, the run
-# on Linux) is .forgejo/workflows/app.yml, on the homelab's own runner; GitHub is a mirror of that Forgejo. GitHub's runners are
-# virtual machines: a run shows the app starts and gives a valid report there, not that real hardware reads correctly.
+# The Go app (docs/app.md) on what the homelab's Forgejo has no runner for: GitHub's Windows and macOS, and Windows and Linux on
+# ARM processors (free for public repositories). Each is tested and run, with its report and its page checked; on Linux ARM the
+# published arm64 download is also built and checked as extracted. Everything else (formatting, vetting and building every
+# target, the same bytes twice, the run on Linux x86-64) is .forgejo/workflows/app.yml, on the homelab's own runner; GitHub is a
+# mirror of that Forgejo. GitHub's runners are virtual machines: a run shows the app starts and gives a valid report there, not
+# that real hardware reads correctly.
 on:
   push:
     paths:
@@ -12,6 +14,8 @@ on:
       - go.mod
       - go.sum
       - tests/validate_report.py
+      - tools/build-release.sh
+      - tools/check-linux-download.sh
       - .github/workflows/app.yml
   pull_request:
 
@@ -32,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2025, macos-15]
+        os: [windows-2025, windows-11-arm, macos-15, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -72,3 +76,10 @@ jobs:
           for _ in $(seq 25); do kill -0 "$app" 2>/dev/null || break; sleep 0.2; done
           if kill -0 "$app" 2>/dev/null; then echo "The app did not end after Done."; kill "$app"; exit 1; fi
           wait "$app"
+      # The arm64 download exactly as a release publishes it, on an ARM processor, as tools/check-linux-download.sh checks the
+      # x86-64 one on the homelab's runner.
+      - name: The Linux arm64 download works as extracted
+        if: matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          tools/build-release.sh "$RUNNER_TEMP/dist"
+          tools/check-linux-download.sh "$RUNNER_TEMP/dist" arm64

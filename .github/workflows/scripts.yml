@@ -1,8 +1,8 @@
 name: Scan scripts
 
-# What needs GitHub: the Windows and macOS runs, which the homelab's runner cannot do. The lint, the tests, the run on Linux
-# and the runs in eight other distributions' containers are .forgejo/workflows/scripts.yml, on the homelab's own runner;
-# GitHub is a mirror of that Forgejo.
+# What needs GitHub: the Windows and macOS runs, and Windows and Linux on ARM processors (free for public repositories), which
+# the homelab's runner cannot do. The lint, the tests, the run on Linux x86-64 and the runs in eight other distributions'
+# containers are .forgejo/workflows/scripts.yml, on the homelab's own runner; GitHub is a mirror of that Forgejo.
 on:
   push:
     paths:
@@ -20,11 +20,17 @@ concurrency:
 
 jobs:
   windows:
-    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The lint reads the text, which is the same on every processor.
       - name: Lint
+        if: matrix.os == 'windows-2025'
         shell: powershell
         run: |
           $found = Invoke-ScriptAnalyzer -Path scripts\mysetup-scan.ps1 -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost
@@ -51,6 +57,21 @@ jobs:
       - name: Made-up computers
         run: python3 -B tests/test_scan_sh.py
       # A virtual machine, not a real Mac: this shows Apple's tools answer as expected, not real hardware.
+      - name: This runner
+        run: |
+          sh scripts/mysetup-scan.sh > report.txt
+          cat report.txt
+          python3 -B tests/validate_report.py report.txt
+
+  # Linux on an ARM processor, which the homelab's runner has none of: the made-up computers and a run on this runner.
+  linux-arm:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Made-up computers
+        run: python3 -B tests/test_scan_sh.py
+      # A virtual machine on an ARM server: this shows the script reads an ARM system's sources, not real hardware.
       - name: This runner
         run: |
           sh scripts/mysetup-scan.sh > report.txt
