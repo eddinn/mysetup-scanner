@@ -73,7 +73,7 @@ root would read.
 | System | How it reads | Root or administrator adds |
 |---|---|---|
 | Windows | The firmware's SMBIOS table (`GetSystemFirmwareTable`), the processor's registry entry, the display adapters SetupAPI lists, each disk's storage queries through a handle with no access rights | Nothing known |
-| Linux | `/proc`, `/sys` (PCI, DMI, block devices), `os-release`, udev's database; the system's own `pci.ids` for graphics names where it has one | Memory modules where udev is missing, from the firmware table in `/sys/firmware/dmi/tables` |
+| Linux | `/proc`, `/sys` (PCI, DMI, block devices), `os-release`, udev's database; the system's own `pci.ids` for graphics names where it has one, and its own `lscpu` for the processor's name where `/proc/cpuinfo` gives none (ARM), as the script reads it | Memory modules where udev is missing, from the firmware table in `/sys/firmware/dmi/tables` |
 | macOS | `sysctl` directly; Apple's own `system_profiler` and `diskutil` | Nothing expected |
 | FreeBSD | `sysctl` directly; the base system's `kenv`, `pciconf` and `geom` | Memory modules, from the firmware table in `/dev/mem` |
 | OpenBSD, NetBSD | `sysctl` directly | Memory modules where the system hands the firmware table to root |
@@ -121,6 +121,11 @@ On 2026-11-11 the release candidate `0.1.0-rc.1`, built by `tools/build-release.
   code 0.
 - Windows 11 x86-64 (the computer above, Windows build 26300): `--version` and `--cli` gave a valid report, exit code 0. The
   Windows app works as beta.4 did; only its version changed.
+
+On GitHub's ARM runners (virtual machines on Microsoft's Cobalt 100 processors) the ARM builds ran too: on Windows 11 and Ubuntu
+24.04 for arm64 they gave valid reports, and the published Linux arm64 `.tar.gz` worked as extracted. That run found that the app
+named no processor on Linux ARM, where `/proc/cpuinfo` gives none: it now asks the system's `lscpu`, as the script does. No real
+ARM computer has run the app yet.
 
 A double-click on a Linux desktop (a file manager starting the extracted program) has not been tried on a real machine yet; the
 operator's Ubuntu 26.04 laptop is next. The other systems are built and vetted for every target, and run on GitHub's macOS

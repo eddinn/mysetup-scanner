@@ -100,6 +100,36 @@ func TestLinuxReadsItsOwnFilesAndNothingPrivate(t *testing.T) {
 	}
 }
 
+// On ARM, /proc/cpuinfo names no processor: the system's own lscpu does, as for the script. Where the file names it, lscpu is not run.
+func TestLinuxOnARMNamesTheProcessorThroughLscpu(t *testing.T) {
+	arm := madeUpLinux()
+	arm["proc/cpuinfo"] = &fstest.MapFile{Data: []byte("processor\t: 0\nBogoMIPS\t: 2000.00\nCPU implementer\t: 0x41\nCPU architecture: 8\n" +
+		"CPU variant\t: 0x0\nCPU part\t: 0xd49\nCPU revision\t: 0\nSerial\t\t: FAKE-SERIAL\n")}
+	var asked []string
+	run := func(tool string, args ...string) []byte {
+		asked = append(asked, strings.Join(append([]string{tool}, args...), " "))
+		if tool != "lscpu" || len(args) != 0 {
+			return nil
+		}
+
+		return []byte("Architecture:             aarch64\n  Byte Order:             Little Endian\nVendor ID:                ARM\n" +
+			"  Model name:             Neoverse-N2\n    Model:                0\n    Thread(s) per core:   1\n")
+	}
+	h := ReadLinux(LinuxSource{FS: arm, Machine: "aarch64", Run: run})
+	h.FinalNotes()
+	text := h.Report().Text()
+	assertClean(t, h, text)
+	assertLines(t, text, "tested=no", "os.architecture=arm64", "cpu.vendor=ARM", "cpu.model=Neoverse-N2")
+	if len(asked) != 1 || asked[0] != "lscpu" {
+		t.Fatalf("lscpu should be asked once, with no arguments: %q", asked)
+	}
+
+	asked = nil
+	if h := ReadLinux(LinuxSource{FS: madeUpLinux(), Machine: "x86_64", Run: run}); h.CPU.Model != "AMD Ryzen 7 7800X3D 8-Core Processor" || len(asked) != 0 {
+		t.Fatalf("lscpu was run where /proc/cpuinfo names the processor: %q %+v", asked, h.CPU)
+	}
+}
+
 func TestLinuxWithoutUdevNeedsRootForModulesAndReadsTheFirmwareAsRoot(t *testing.T) {
 	fsys := madeUpLinux()
 	delete(fsys, "run/udev/data/+dmi:id")
