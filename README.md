@@ -217,9 +217,12 @@ addresses, and fail if any get through.
 ## Development
 
 The scripts need only what they check for themselves. The tests need Python 3 (its standard library only), and the linters
-`shellcheck` and PSScriptAnalyzer (`Install-Module PSScriptAnalyzer -Scope CurrentUser`). The workflow
-[`scripts.yml`](.github/workflows/scripts.yml) runs the same steps on Linux, Windows and macOS for every change to the scripts or
-tests, and on Linux also in containers of eight other distributions.
+`shellcheck` and PSScriptAnalyzer (`Install-Module PSScriptAnalyzer -Scope CurrentUser`). The same steps run for every change to the
+scripts or tests, in two places. This repository lives on MySetup's own Git server, and GitHub is its mirror, which receives every
+push. The lint, the tests and the run on Linux are on that server's own runner
+([`.forgejo/workflows/scripts.yml`](.forgejo/workflows/scripts.yml)). What needs GitHub runs there
+([`.github/workflows/scripts.yml`](.github/workflows/scripts.yml)): Windows, macOS, and the script in containers of eight other
+distributions.
 
 **Linux, macOS and other Unix-like systems:**
 

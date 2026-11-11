@@ -1,0 +1,113 @@
+name: App
+
+# The Go app (docs/app.md) on the homelab's Forgejo and its Linux runner: formatted, vetted for every target, tested, built
+# without C for every target and built twice to show the same source gives the same bytes, then run on the runner with its
+# report and its page checked. The runner is a container: a run shows the app starts and gives a valid report there, not that
+# real hardware reads correctly. The same run on Windows and macOS is GitHub's (.github/workflows/app.yml), which gets every
+# push through the mirror. A failed run emails whoever pushed.
+on:
+  push:
+    paths:
+      - cmd/**
+      - internal/**
+      - go.mod
+      - go.sum
+      - tests/validate_report.py
+      - .forgejo/workflows/app.yml
+  pull_request:
+
+enable-email-notifications: true
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: '0'
+  GOTOOLCHAIN: local
+  GOFLAGS: -mod=readonly
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Formatted
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Vetted for every target
+        run: |
+          for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 freebsd/amd64 openbsd/amd64 netbsd/amd64 illumos/amd64; do
+            echo "== $target"
+            GOOS=${target%/*} GOARCH=${target#*/} go vet ./...
+          done
+      - name: Made-up computers
+        run: go test -count=1 ./...
+      # -buildvcs=false, as the release builds: the bytes depend on the source and Go's version alone, not on the clone's tags or
+      # state. Built outside the checkout, which the last check keeps clean.
+      - name: The same source gives the same bytes
+        working-directory: ${{ github.workspace }}
+        run: |
+          cd "$RUNNER_TEMP" && mkdir -p a b dist && cd "$GITHUB_WORKSPACE"
+          a="$RUNNER_TEMP/a" b="$RUNNER_TEMP/b" dist="$RUNNER_TEMP/dist"
+          for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 freebsd/amd64 openbsd/amd64 netbsd/amd64 illumos/amd64; do
+            os=${target%/*}; arch=${target#*/}; ext=; [ "$os" = windows ] && ext=.exe
+            name=mysetup-scan-$os-$arch$ext
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$a/$name" ./cmd/mysetup-scan
+            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$b/$name" ./cmd/mysetup-scan
+            cmp "$a/$name" "$b/$name"
+            cp "$a/$name" "$dist/"
+          done
+          test -z "$(git status --porcelain)"
+          (cd "$dist" && sha256sum * | tee SHA256SUMS)
+      # Forgejo's own artifact action: GitHub's refuses any server that is not github.com.
+      - uses: forgejo/upload-artifact@v4
+        with:
+          name: mysetup-scan-stage-1
+          path: ${{ runner.temp }}/dist/
+          retention-days: 14
+
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Made-up computers
+        run: go test -count=1 ./...
+      - name: This runner
+        shell: bash
+        run: |
+          go build -trimpath -o scan-app.exe ./cmd/mysetup-scan
+          ./scan-app.exe --cli > report.txt
+          cat report.txt
+          python3 -B tests/validate_report.py report.txt || python -B tests/validate_report.py report.txt
+      # The page, as a browser uses it, without opening one: served, its download the same report, another site's Done refused,
+      # and its own Done ending the app.
+      - name: The page on this runner
+        shell: bash
+        run: |
+          ./scan-app.exe --no-browser 2> page.txt &
+          app=$!
+          url=
+          for _ in $(seq 50); do
+            url=$(grep -o 'http://127\.0\.0\.1:[0-9]*/t/[0-9a-f]\{64\}/' page.txt | head -n 1 || true)
+            [ -n "$url" ] && break
+            sleep 0.2
+          done
+          test -n "$url"
+          origin=${url%%/t/*}
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$url")" = 200
+          curl -s "${url}report.txt" | cmp - report.txt
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://attacker.example' "${url}done")" = 403
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Origin: $origin" "${url}done")" = 204
+          for _ in $(seq 25); do kill -0 "$app" 2>/dev/null || break; sleep 0.2; done
+          if kill -0 "$app" 2>/dev/null; then echo "The app did not end after Done."; kill "$app"; exit 1; fi
+          wait "$app"

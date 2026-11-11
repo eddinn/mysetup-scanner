@@ -1,0 +1,36 @@
+name: Scan scripts
+
+# The scan scripts on the homelab's Forgejo and its Linux runner: the shell script linted, tested and run. Jobs there have no
+# Docker and there are no Windows or macOS runners, so the other distributions' containers and the Windows and macOS runs are
+# GitHub's (.github/workflows/scripts.yml), which gets every push through the mirror. A failed run emails whoever pushed.
+on:
+  push:
+    paths:
+      - scripts/**
+      - tests/**
+      - .forgejo/workflows/scripts.yml
+  pull_request:
+
+enable-email-notifications: true
+
+concurrency:
+  group: scripts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lint
+        run: |
+          command -v shellcheck >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck; }
+          shellcheck -s sh scripts/mysetup-scan.sh
+      - name: Made-up computers
+        run: python3 -B tests/test_scan_sh.py
+      - name: This runner
+        run: |
+          sh scripts/mysetup-scan.sh > report.txt
+          cat report.txt
+          python3 -B tests/validate_report.py report.txt
