@@ -121,10 +121,13 @@ python3 -B tests/validate_report.py report.txt
 ```
 
 The last line opens the page. For another system, set `GOOS` and `GOARCH`, such as `GOOS=windows GOARCH=amd64` for
-`mysetup-scan.exe`. The workflow [`app.yml`](../.github/workflows/app.yml) vets every target. On Linux, Windows and macOS it runs
-the tests, runs the app with `--cli` and checks its report, and serves the page with `--no-browser`. It checks the page as a browser
-would use it: the download matches the report, another site's Done is refused, and the page's own Done ends the app. It builds every
-target twice and fails if the bytes differ, and keeps the builds as a workflow artifact for 14 days.
+`mysetup-scan.exe`. Two workflows check every change. On MySetup's own Git server and its Linux runner,
+[`.forgejo/workflows/app.yml`](../.forgejo/workflows/app.yml) vets every target, builds every target twice and fails if the bytes
+differ, and keeps the builds as a workflow artifact for 14 days. On GitHub, the mirror that receives every push,
+[`.github/workflows/app.yml`](../.github/workflows/app.yml) covers Windows and macOS, which that server has no runners for. On
+each of the three systems the tests run, the app runs with `--cli` and its report is checked, and the page is served with
+`--no-browser` and checked as a browser would use it: the download matches the report, another site's Done is refused, and the
+page's own Done ends the app.
 
 ## Releases
 

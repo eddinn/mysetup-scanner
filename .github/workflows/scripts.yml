@@ -1,5 +1,8 @@
 name: Scan scripts
 
+# What needs GitHub: the script in containers of other distributions (jobs on the homelab's runner have no Docker), and the
+# Windows and macOS runs. The lint, the tests and the run on Linux are .forgejo/workflows/scripts.yml, on the homelab's own
+# runner; GitHub is a mirror of that Forgejo.
 on:
   push:
     paths:
@@ -16,20 +19,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linux:
+  distributions:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Lint
-        run: shellcheck -s sh scripts/mysetup-scan.sh
-      - name: Made-up computers
-        run: python3 -B tests/test_scan_sh.py
-      - name: This runner
-        run: |
-          sh scripts/mysetup-scan.sh > report.txt
-          cat report.txt
-          python3 -B tests/validate_report.py report.txt
       # Real tools of other distributions. A container is not a real machine: this shows the script
       # runs and its report is valid there, not that real hardware reads correctly.
       - name: Other distributions
