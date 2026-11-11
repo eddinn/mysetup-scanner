@@ -14,15 +14,17 @@ import (
 )
 
 // LinuxSource is a Linux computer as the reader sees it: its files from "/" (FS paths have no leading slash), whether the
-// app runs as root, and the kernel's machine type.
+// app runs as root, the kernel's machine type, and how one of the system's own tools is run (nil runs none).
 type LinuxSource struct {
 	FS      fs.FS
 	Root    bool
 	Machine string
+	Run     func(tool string, args ...string) []byte
 }
 
-// ReadLinux reads a Linux computer from its own files: /proc, /sys, os-release and the udev database. It runs no program.
-// Sources that also hold serial numbers (udev, the firmware table) are read by exact key.
+// ReadLinux reads a Linux computer from its own files: /proc, /sys, os-release and the udev database. It runs one program
+// only where those files do not name the processor, as on ARM: the system's own lscpu, as the script reads it. Sources that
+// also hold serial numbers (udev, the firmware table) are read by exact key.
 func ReadLinux(src LinuxSource) Hardware {
 	h := Hardware{Family: "linux", Architecture: NormalArchitecture(src.Machine)}
 	h.Environment = linuxEnvironment(src.FS)
@@ -32,7 +34,7 @@ func ReadLinux(src LinuxSource) Hardware {
 	if h.Environment == "wsl" {
 		return h
 	}
-	h.CPU = linuxCPU(src.FS)
+	h.CPU = linuxCPU(src)
 	h.GPUs = linuxGPUs(src.FS, &h)
 	h.Board = Board{Vendor: firstLine(src.FS, "sys/class/dmi/id/board_vendor"), Model: firstLine(src.FS, "sys/class/dmi/id/board_name")}
 	if h.Board.Model == "" {
@@ -87,9 +89,22 @@ func linuxOS(fsys fs.FS) (string, string) {
 	return unquote(keyValue(text, "=", "ID")), unquote(keyValue(text, "=", "VERSION_ID"))
 }
 
-func linuxCPU(fsys fs.FS) CPU {
+func linuxCPU(src LinuxSource) CPU {
+	fsys := src.FS
 	info := readFile(fsys, "proc/cpuinfo")
 	c := CPU{Vendor: keyValue(info, ":", "vendor_id"), Model: keyValue(info, ":", "model name")}
+	// On ARM, /proc/cpuinfo gives only the processor's implementer and part numbers. The system's own lscpu names them, and the
+	// script reads it first (scripts/mysetup-scan.sh, read_cpu_linux), so the app asks it where the file names no processor: the
+	// two reports stay the same. Where the file names it (x86-64), lscpu says the same and is not run.
+	if (c.Model == "" || c.Vendor == "") && src.Run != nil {
+		out := src.Run("lscpu")
+		if c.Vendor == "" {
+			c.Vendor = keyValue(out, ":", "Vendor ID")
+		}
+		if c.Model == "" {
+			c.Model = keyValue(out, ":", "Model name")
+		}
+	}
 	if c.Model == "" {
 		c.Model = keyValue(info, ":", "Processor")
 	}

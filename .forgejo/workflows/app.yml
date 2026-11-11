@@ -14,6 +14,7 @@ on:
       - go.sum
       - tests/validate_report.py
       - tools/build-release.sh
+      - tools/check-linux-download.sh
       - .forgejo/workflows/app.yml
   pull_request:
 
@@ -60,10 +61,10 @@ jobs:
             GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/b/$os-$arch" ./cmd/mysetup-scan
             cmp "$RUNNER_TEMP/a/$os-$arch" "$RUNNER_TEMP/b/$os-$arch"
           done
-      - name: The release build script, linted
+      - name: The release scripts, linted
         run: |
           command -v shellcheck >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck; }
-          shellcheck tools/build-release.sh
+          shellcheck tools/build-release.sh tools/check-linux-download.sh
       # The downloads exactly as a release publishes them (tools/build-release.sh, which GitHub's release workflow runs too):
       # Windows and Linux, each built twice and refused if the bytes differ, Linux as its .tar.gz.
       - name: The downloads, as a release builds them
@@ -71,24 +72,9 @@ jobs:
           tools/build-release.sh "$RUNNER_TEMP/dist"
           test -z "$(git status --porcelain)"
       # A browser download loses the executable permission; the .tar.gz keeps it. Extracted as a member would, the program is
-      # executable, says its version and gives a valid report.
+      # executable, says its version and gives a valid report. GitHub's ARM runner checks the arm64 download the same way.
       - name: The Linux download works as extracted
-        run: |
-          version=$(sed -n 's/^const Version = "\(.*\)"$/\1/p' internal/scan/hardware.go)
-          pre=$(sed -n 's/^const Prerelease = "\(.*\)"$/\1/p' internal/scan/hardware.go)
-          mkdir "$RUNNER_TEMP/extract" && cd "$RUNNER_TEMP/extract"
-          archive="$RUNNER_TEMP/dist/mysetup-scan-linux-x86-64.tar.gz"
-          tar --numeric-owner -tvzf "$archive" | awk '{print $1, $2, $6}' | LC_ALL=C sort > listing.txt
-          cat listing.txt
-          printf '%s\n' 'drwxr-xr-x 0/0 mysetup-scan-linux-x86-64/' \
-            '-rw-r--r-- 0/0 mysetup-scan-linux-x86-64/README.txt' \
-            '-rwxr-xr-x 0/0 mysetup-scan-linux-x86-64/mysetup-scan' | LC_ALL=C sort | diff - listing.txt
-          tar -xzf "$archive"
-          test -x mysetup-scan-linux-x86-64/mysetup-scan
-          mysetup-scan-linux-x86-64/mysetup-scan --version | tee version.txt
-          grep -q "${version}${pre:+-$pre}" version.txt
-          mysetup-scan-linux-x86-64/mysetup-scan --cli > report.txt
-          python3 -B "$GITHUB_WORKSPACE/tests/validate_report.py" report.txt
+        run: tools/check-linux-download.sh "$RUNNER_TEMP/dist" x86-64
       # Forgejo's own artifact action: GitHub's refuses any server that is not github.com.
       - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
         with:

@@ -300,8 +300,8 @@ The scripts need only what they check for themselves. The tests need Python 3 (i
 `shellcheck` and PSScriptAnalyzer (`Install-Module PSScriptAnalyzer -Scope CurrentUser`). The same steps run for every change to the
 scripts or tests, in two places. This repository lives on MySetup's own Git server, and GitHub is its mirror, which receives every
 push. The lint, the tests, the run on Linux and the runs in containers of eight other distributions are on that server's own runner
-([`.forgejo/workflows/scripts.yml`](.forgejo/workflows/scripts.yml)). Windows and macOS, which need GitHub's runners, run there
-([`.github/workflows/scripts.yml`](.github/workflows/scripts.yml)).
+([`.forgejo/workflows/scripts.yml`](.forgejo/workflows/scripts.yml)). Windows and macOS, and Windows and Linux on ARM processors,
+which need GitHub's runners, run there ([`.github/workflows/scripts.yml`](.github/workflows/scripts.yml)).
 
 **Linux, macOS and other Unix-like systems:**
 

@@ -50,6 +50,18 @@ def available_shells() -> list[list[str]]:
     return shells
 
 
+def runs_own_uname(shell: list[str]) -> bool:
+    """Whether a shell runs a uname of its own whatever PATH says, as BusyBox's does with its applet, so that a made-up computer
+    cannot change what uname answers there: it says the processor of the machine running the test."""
+    with tempfile.TemporaryDirectory(prefix="mysetup-scan-test-") as folder:
+        made_up = Path(folder) / "uname"
+        made_up.write_text("#!/bin/sh\necho made-up\n")
+        made_up.chmod(0o755)
+        environment = {**os.environ, "PATH": folder + os.pathsep + os.environ.get("PATH", "")}
+        answer = subprocess.run([*shell, "-c", "uname -m"], capture_output=True, text=True, env=environment, check=False).stdout
+    return answer.strip() != "made-up"
+
+
 def available_awks() -> list[str]:
     # "awk" is whatever this system calls by that name, such as the one macOS ships.
     return [awk for awk in ("awk", "mawk", "gawk", "original-awk", "busybox-awk") if shutil.which(awk.replace("busybox-awk", "busybox"))]
@@ -493,8 +505,13 @@ class Base(unittest.TestCase):
 class Reports(Base):
     def test_desktop_report_is_exact_under_every_shell_and_awk(self) -> None:
         for shell in available_shells():
+            # The made-up desktop is x86_64. A shell with a uname of its own reports this machine's processor instead, so on any
+            # other processor (GitHub's ARM runner) its report cannot be the made-up one; x86-64 runners still check it in full.
+            own_uname = runs_own_uname(shell) and os.uname().machine != "x86_64"
             for awk in available_awks():
                 with self.subTest(shell=shell[0], awk=awk):
+                    if own_uname:
+                        self.skipTest(f"{shell[0]} runs its own uname, which says this {os.uname().machine} machine, not the made-up x86_64")
                     result = self.scan(desktop(awk), shell=shell)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stdout, DESKTOP_REPORT)

@@ -12,7 +12,7 @@ import (
 func Read() Hardware {
 	var name unix.Utsname
 	_ = unix.Uname(&name)
-	h := ReadLinux(LinuxSource{FS: os.DirFS("/"), Root: os.Geteuid() == 0, Machine: unix.ByteSliceToString(name.Machine[:])})
+	h := ReadLinux(LinuxSource{FS: os.DirFS("/"), Root: os.Geteuid() == 0, Machine: unix.ByteSliceToString(name.Machine[:]), Run: runTool})
 	h.FinalNotes()
 
 	return h
