@@ -1,6 +1,6 @@
 name: App release
 
-# A tag app-vVERSION (app-v0.1.0-beta.1) drafts a release of the app: each build twice, refused if the bytes differ, with
+# A tag app-vVERSION (app-v0.1.0-beta.1) drafts a release of the app: each download built twice, refused if the bytes differ, with
 # SHA256SUMS and GitHub's attestation that these exact files were built from this repository at that tag. The tag must match the
 # app's Version and Prerelease (internal/scan/hardware.go). A tag with a "-" part is a pre-release and never becomes the
 # repository's latest release, which stays the scripts'. A person reads the draft and publishes it.
@@ -41,22 +41,14 @@ jobs:
           test -s "docs/releases/${GITHUB_REF_NAME}.md"
           if [ -n "$pre" ]; then echo "KIND=--prerelease" >> "$GITHUB_ENV"; else echo "KIND=" >> "$GITHUB_ENV"; fi
 
-      # -buildvcs=false: the bytes depend on the source and Go's version alone, not on the clone's tags or state, so a shallow
-      # clone, a full clone and a source archive all rebuild them (Go 1.24 and later stamp a version from the nearest tag).
-      - name: Build each system twice; the bytes must be the same
+      # tools/build-release.sh, which the homelab's CI runs for every push too: each download built twice and refused if the bytes
+      # differ, Windows as the program, Linux as a .tar.gz whose program is already executable, and SHA256SUMS. -buildvcs=false:
+      # the bytes depend on the source and Go's version alone, not on the clone's tags or state, so a shallow clone, a full clone
+      # and a source archive all rebuild them (Go 1.24 and later stamp a version from the nearest tag).
+      - name: Build each download twice; the bytes must be the same
         run: |
-          mkdir -p "$RUNNER_TEMP/a" "$RUNNER_TEMP/b" "$RUNNER_TEMP/dist"
-          for target in windows/amd64/x86-64 windows/arm64/arm64 linux/amd64/x86-64 linux/arm64/arm64; do
-            os=${target%%/*}; rest=${target#*/}; arch=${rest%%/*}; label=${rest#*/}
-            ext=; [ "$os" = windows ] && ext=.exe
-            name="mysetup-scan-$os-$label$ext"
-            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/a/$name" ./cmd/mysetup-scan
-            GOOS=$os GOARCH=$arch go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$RUNNER_TEMP/b/$name" ./cmd/mysetup-scan
-            cmp "$RUNNER_TEMP/a/$name" "$RUNNER_TEMP/b/$name"
-            cp "$RUNNER_TEMP/a/$name" "$RUNNER_TEMP/dist/"
-          done
+          tools/build-release.sh "$RUNNER_TEMP/dist"
           test -z "$(git status --porcelain)"
-          (cd "$RUNNER_TEMP/dist" && sha256sum mysetup-scan-* > SHA256SUMS && cat SHA256SUMS)
 
       - name: Attest where the files come from
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

@@ -74,6 +74,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	graphical := !opts.cli
+	// Double-clicked on Linux or another Unix-like system, the app has no terminal to write to: it says what goes wrong in the
+	// desktop's own message box, as it does on Windows.
+	if graphical && !opts.detached && startedWithoutTerminal() {
+		opts.detached = true
+	}
 	if opts.detached {
 		leaveOwnConsole()
 	}
@@ -85,7 +90,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	h := scan.Read()
 	if h.Environment == "wsl" {
-		fmt.Fprintln(stderr, "This is WSL, which sees virtual hardware. Please run the Windows app (mysetup-scan.exe) in Windows instead. Nothing was reported.")
+		const wsl = "This is WSL, which sees virtual hardware. Please run the Windows app (mysetup-scan.exe) in Windows instead. Nothing was reported."
+		fmt.Fprintln(stderr, wsl)
+		if opts.detached {
+			tell(wsl)
+		}
 
 		return 4
 	}
@@ -95,6 +104,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	session, why := page.FindSession()
 	if session == nil && !opts.noBrowser {
+		if opts.detached {
+			tell("MySetup scan found no desktop to open its page in (" + why + "). Open a terminal in the folder with the app " +
+				"and run it there with --cli: ./mysetup-scan --cli")
+		}
+
 		return printReport(h, text, why, stdout, stderr)
 	}
 
