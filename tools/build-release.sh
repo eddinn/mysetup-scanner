@@ -3,7 +3,8 @@
 # differ, then Windows as the program itself and Linux as a .tar.gz whose program is already executable, so it can be
 # double-clicked once extracted (a browser download never keeps that permission). The archives are reproducible too: the
 # same commit gives the same bytes: the archives' times are the commit's, or SOURCE_DATE_EPOCH's where it is set (needed to
-# rebuild from a source archive, which has no Git history). SHA256SUMS covers what is published. Used by
+# rebuild from a source archive, which has no Git history). A program that names any MySetup but mysetup.is, as a development
+# build does (go build -tags dev, internal/send), is refused. SHA256SUMS covers what is published. Used by
 # .forgejo/workflows/app.yml and .github/workflows/app-release.yml alike. Needs Go (the version in go.mod), bash, GNU tar and gzip.
 #   tools/build-release.sh <out-dir>
 set -euo pipefail
@@ -20,6 +21,12 @@ mkdir -p "$out" "$work/a" "$work/b"
 
 build() { # $1 GOOS, $2 GOARCH, $3 output file
     (cd "$root" && GOOS=$1 GOARCH=$2 go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o "$3" ./cmd/mysetup-scan)
+    # A release sends to mysetup.is alone: a development build's other sites, or its switch for them, never reach a download.
+    if LC_ALL=C grep -aq -e 'staging.mysetup.is' -e 'MYSETUP_SCAN_SITE' "$3"; then
+        echo "$3 is a development build: it names another MySetup. A release is built without -tags dev." >&2
+        exit 1
+    fi
+    LC_ALL=C grep -aq 'https://mysetup.is' "$3" || { echo "$3 does not name https://mysetup.is." >&2; exit 1; }
 }
 
 package_linux() { # $1 directory with the program, $2 label, $3 archive
@@ -31,12 +38,14 @@ MySetup scan app $full for Linux ($2)
 
 1. Double-click mysetup-scan. If a box asks whether to run it, click Run (some file managers call it Execute).
    Your web browser opens a page with the report about this computer.
-2. Follow the steps on that page to add the report to your build on mysetup.is.
+2. Follow the steps on that page to send the report to your build on mysetup.is with a code from your
+   build page, or to copy and paste it there.
 
 If double-clicking does nothing, your file manager does not start programs. Follow the steps
 "Linux: in a terminal" instead: https://github.com/eddinn/mysetup-scanner#the-app-step-by-step
 
-It only reads hardware names: it sends nothing anywhere, writes no files and installs nothing.
+It reads hardware names, and sends the report to mysetup.is only when you type a code from your build page:
+nothing else is sent anywhere, no files are written, nothing is installed.
 The source, the checksums and how to check this download: https://github.com/eddinn/mysetup-scanner
 EOF
     chmod 0755 "$stage/$name" "$stage/$name/mysetup-scan"

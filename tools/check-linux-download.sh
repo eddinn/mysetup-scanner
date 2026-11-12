@@ -23,6 +23,6 @@ tar -xzf "$archive"
 test -x "$name/mysetup-scan"
 "$name/mysetup-scan" --version | tee version.txt
 grep -qx "mysetup-scan $version${pre:+-$pre}" version.txt
-"$name/mysetup-scan" --cli > report.txt
+"$name/mysetup-scan" --cli < /dev/null > report.txt
 python3 -B "$root/tests/validate_report.py" report.txt
 echo "$name.tar.gz works as extracted."

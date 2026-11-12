@@ -2,17 +2,19 @@
 
 A Go program that reads the same report as the scripts ([report-format.md](report-format.md)), with `source=app/VERSION`, and
 shows it on a page in your own browser, or in the terminal with `--cli`. The design and the operator's decisions are in MySetup's
-`docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is here: reading, and the two front
-ends. The site side (codes, upload, server checks), sending from the page, and code signing come in the next stages. Its current
-release is `app-v0.1.0`, the first stable one (2026-11-12). The member's steps, for each system and both ways of starting it (double-click, or a
-terminal with `--cli`), are in the [README](../README.md).
+`docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is reading and the two front ends.
+Stage 2 is sending: the site's codes, upload route and checks are MySetup's, and the app sends its report with a code from the
+build page ([Sending](#sending)), on the page and in the terminal, since 0.2.0 (not released yet: the operator's steps 4 and 5,
+a test on staging and his approval, come first). Code signing comes after stage 2. The current release is `app-v0.1.0`, the first
+stable one (2026-11-12), which cannot send. The member's steps, for each system and both ways of starting it (double-click, or a
+terminal with `--cli`), are in the [README](../README.md); they describe the current release.
 
 ## The page and the terminal
 
 | How it is started | What it does |
 |---|---|
-| Double-clicked, or run with no option | Opens a page in your default browser with the report and six numbered steps to add it to the build: Copy report, open mysetup.is, the build, Scan this computer, paste, Done |
-| `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it, with the same steps, on standard error |
+| Double-clicked, or run with no option | Opens a page in your default browser with the report and four numbered steps to send it to the build: get a code on the build page, type it and click Send to my build, open the review, Done. The six steps to copy and paste it instead are in a fold under them |
+| `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it on standard error. Then, where it reads and writes a terminal, it gives the three steps to send it and asks for the code; Enter without one sends nothing and gives the five steps to copy and paste it. Where it cannot ask (its input redirected, or run by another program), it gives the copy steps and waits for nothing |
 | `mysetup-scan --no-browser` | Serves the page without opening a browser, and prints its address to open yourself |
 | There is no desktop | Prints the report in the terminal with the steps, and says why: over SSH or with no desktop (no `DISPLAY` or `WAYLAND_DISPLAY`), or no `xdg-open` |
 | Double-clicked on Linux or another Unix-like system | As with no option. It has no terminal to print to, so what goes wrong is said in the desktop's own message box |
@@ -41,7 +43,8 @@ never started as root. None of them is required; with none, the message goes whe
 Double-clicked on Windows, Windows opens a console window for the app alone. The app starts again without one and that window
 closes, so only the browser page is left. This works the same in the classic console and in Windows Terminal. If it cannot start
 again, it carries on in the window. Without a console it has nowhere to print, so it reports a problem in a message box. Run with
-`--cli` in a window of its own, it copies the report to the clipboard and waits for Enter before the window closes. It counts a
+`--cli` in a window of its own, it asks for the code as in any terminal, then, unless the report was sent, copies it to the
+clipboard, and waits for Enter before the window closes. It counts a
 window as its own only when it is alone on the console and its input and output are that console. Another program that takes
 its output (WSL, or a script redirecting it) may give it a console of its own, but there it never waits: `app-v0.1.0-beta.2`
 waited there for an Enter nobody could see.
@@ -55,13 +58,45 @@ The page is an attack surface and is hardened as the design asks ([internal/page
   Without the token, every request is refused.
 - The `Host` header must be exactly `127.0.0.1:port`, so a site that points its own name at 127.0.0.1 (DNS rebinding) gets
   `421 Misdirected Request`.
-- Done, the one request that changes anything, is a POST accepted only with the page's own `Origin` (and `Sec-Fetch-Site:
-  same-origin` where the browser sends it). Another site's request cannot end the app.
+- Done and Send, the two requests that do anything, are POSTs accepted only with the page's own `Origin` (and `Sec-Fetch-Site:
+  same-origin` where the browser sends it). Another site's request cannot end the app or send anything. Send also needs
+  `Content-Type: application/json`, which a form on another site cannot set without asking first, takes a body of 1 KB at most,
+  and takes only the code from the page (see [Sending](#sending)).
 - A content policy lets the page load nothing from anywhere else: `default-src 'none'`, with its one style and one script allowed
   by a fresh nonce for each response, and no framing. It is also sent with `nosniff`, `no-referrer`, `no-store` and same-origin
   opener and resource policies.
 - The report and notes are written through Go's `html/template`, which escapes them.
 - The server has read, write and header time limits, and a 16 KB header limit.
+
+## Sending
+
+The app sends its report only when the member types a code from their build page: typing it is the approval (MySetup's
+`docs/scanner/design.md`, Pairing). Without a code nothing is sent, and the copy-and-paste way works as before.
+[internal/send](../internal/send/send.go) does the sending:
+
+- **Where:** a release build sends only to `https://mysetup.is/api/scanner/reports`, fixed in the program
+  ([site_release.go](../internal/send/site_release.go)); nothing a member types or a page sends can change it. It follows no
+  redirect, gives up after 30 seconds, and reads at most 64 KB of the answer.
+- **What:** one HTTPS POST of JSON `{"code": "...", "report": "..."}` with the report exactly as the page and `--cli` show it, and
+  the headers `Content-Type` and `Accept: application/json` and `User-Agent: MySetup-Scanner/<version>`. No cookie, no other
+  data. A code is checked first: 8 letters and digits (spaces and dashes are ignored, as the site ignores them); anything else is
+  never sent.
+- **The answer:** `201` gives the review's address, taken only when it is on the same site and under `/setups/` (with no `..`
+  or encoded slash to climb out of it). `422` is the
+  site's own words for the member (a wrong, used or expired code, or a report it refuses), shown as they are, cut to 300
+  printable characters. `429` is "too many tries", `413` "too large", `404` "sending is not open on MySetup yet" (the site's
+  switch is off), and anything else an error with its status. A network error says MySetup could not be reached.
+- **On the page:** the code goes from the page to the app (`POST send`, checked as above), and the app sends the report it
+  serves, never anything from the page but the code. One send at a time. The page then shows a button to open the review.
+- **In the terminal:** the app asks only when both its input and its error output are a terminal (on Windows, a console): run by
+  a script, with its input redirected, or from WSL, it never waits for an answer nobody can give. It takes up to five codes,
+  saying after each what came of it, and Enter without a code stops.
+
+A development build, `go build -tags dev`, sends to MySetup's staging site instead, or to the site `MYSETUP_SCAN_SITE` names when
+that is `https://staging.mysetup.is` or `http://127.0.0.1` or `http://localhost` with a port, for a test
+([site_dev.go](../internal/send/site_dev.go)); any other value is ignored. It says it is a development build, and names the site
+in its steps. `tools/build-release.sh` refuses a program that names staging or `MYSETUP_SCAN_SITE`, so a development build can
+never become a download.
 
 ## Every system, nothing to install
 
@@ -134,6 +169,12 @@ page in a browser tab; Copy report and Done worked, and Done ended the app. A do
 unpacked it into a folder of its own, so the README's steps use that, with right-click Extract for other file managers. The report was valid (`tested=yes`,
 `physical`) and held nothing private.
 
+On 2026-11-12 sending (0.2.0, not released) was checked on the operator's Windows 11 computer with `tools/check-send.sh` and a
+Windows development build, run from WSL (whose network is mirrored with Windows, so both share 127.0.0.1) against the stand-in
+site `tests/fake_site.py`: the page's send from another site was refused and reached no site, a wrong code came back in the
+site's words, the right code sent exactly the report `--cli` printed and gave the review's address, and Done ended the app.
+Started from WSL's terminal, the Windows program's input is a pipe, so `--cli` gave the copy steps and asked nothing.
+
 The other systems are built and vetted for every target, and run on GitHub's macOS
 runner, but no real machine of them has passed yet. The paths that need root (the firmware table on Linux without udev, `/dev/mem` on FreeBSD) are tested on a made-up table only.
 
@@ -144,25 +185,45 @@ Go 1.27 or newer:
 ```sh
 go vet ./...
 go test ./...
+go test -tags dev ./...
 CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w -buildid=' -o mysetup-scan ./cmd/mysetup-scan
-./mysetup-scan --cli > report.txt
+./mysetup-scan --cli < /dev/null > report.txt
 python3 -B tests/validate_report.py report.txt
 ./mysetup-scan
 ```
 
-The last line opens the page. For another system, set `GOOS` and `GOARCH`, such as `GOOS=windows GOARCH=amd64` for
+The last line opens the page. `< /dev/null` keeps `--cli` from asking for a code. Sending is checked end to end, on this
+computer only, with a development build and a stand-in for MySetup (Python 3 and curl):
+
+```sh
+tools/check-send.sh
+```
+
+```text
+The terminal asked for the code and sent the report.
+Sending works end to end: refused from another site, the site's words for a wrong code, the same report for the right one.
+```
+
+The first line comes only on Linux, where `script` gives the app a terminal to ask in. From WSL, a Windows development build is
+checked the same way (WSL itself is declined by the app):
+
+```sh
+GOOS=windows GOARCH=amd64 go build -tags dev -trimpath -o scan-dev.exe ./cmd/mysetup-scan
+WSLENV=MYSETUP_SCAN_SITE tools/check-send.sh ./scan-dev.exe
+``` For another system, set `GOOS` and `GOARCH`, such as `GOOS=windows GOARCH=amd64` for
 `mysetup-scan.exe`. `tools/build-release.sh dist` builds the downloads exactly as a release does (see Releases). Two workflows check
 every change. On MySetup's own Git server and its Linux runner, [`.forgejo/workflows/app.yml`](../.forgejo/workflows/app.yml) vets
 every target and builds every target twice, failing if the bytes differ. It lints and runs `tools/build-release.sh`, checks the
 Linux x86-64 `.tar.gz` as a member extracts it with `tools/check-linux-download.sh` (one folder, the program executable, its
-version, a valid report), and keeps the downloads as a workflow artifact for 14 days. On GitHub, the mirror that receives every
+version, a valid report), runs the development build's tests and `tools/check-send.sh`, and keeps the downloads as a workflow
+artifact for 14 days. On GitHub, the mirror that receives every
 push, [`.github/workflows/app.yml`](../.github/workflows/app.yml) covers what that server has no runners for: Windows and macOS,
 and Windows and Linux on ARM processors, where it also checks the arm64 `.tar.gz` as extracted. GitHub's ARM runners are free
 for public repositories; like its others they are virtual machines, so they show the ARM programs run and give valid reports,
 not that real ARM hardware reads correctly. On each system the tests run, the app runs with `--cli` and its report is checked,
 and the page is served with
 `--no-browser` and checked as a browser would use it: the download matches the report, another site's Done is refused, and the
-page's own Done ends the app.
+page's own Done ends the app. Then `tools/check-send.sh` checks sending there.
 
 ## Releases
 
@@ -170,7 +231,8 @@ A release starts from a signed tag `app-v<version>`, such as `app-v0.1.0`, match
 [internal/scan/hardware.go](../internal/scan/hardware.go), with its notes in `docs/releases/`. The workflow
 [`app-release.yml`](../.github/workflows/app-release.yml) checks the version and runs
 [`tools/build-release.sh`](../tools/build-release.sh), which the homelab's CI also runs for every push. That script builds Windows
-and Linux for x86-64 and ARM twice and fails if the bytes differ. Windows gets the program itself
+and Linux for x86-64 and ARM twice and fails if the bytes differ, or if a program names any MySetup but `https://mysetup.is` (a
+development build). Windows gets the program itself
 (`mysetup-scan-windows-x86-64.exe`). Linux gets a `.tar.gz` (`mysetup-scan-linux-x86-64.tar.gz`) holding one folder with the program
 `mysetup-scan`, already executable, and a short `README.txt`. A browser download never keeps the permission to run, but an
 extracted archive does, so the program can be double-clicked. The workflow attaches the four files and `SHA256SUMS`, attests them,

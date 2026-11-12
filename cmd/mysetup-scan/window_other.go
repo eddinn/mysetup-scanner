@@ -12,7 +12,7 @@ import (
 )
 
 // keepWindowOpen does nothing outside Windows: no console window is opened for the app there and closed when it ends.
-func keepWindowOpen(string, io.Writer) {}
+func keepWindowOpen(string, bool, io.Writer) {}
 
 // detach does nothing outside Windows: no console window is opened for the app there.
 func detach() bool { return false }

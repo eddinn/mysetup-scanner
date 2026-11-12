@@ -1,8 +1,8 @@
 name: App
 
 # The Go app (docs/app.md) on what the homelab's Forgejo has no runner for: GitHub's Windows and macOS, and Windows and Linux on
-# ARM processors (free for public repositories). Each is tested and run, with its report and its page checked; on Linux ARM the
-# published arm64 download is also built and checked as extracted. Everything else (formatting, vetting and building every
+# ARM processors (free for public repositories). Each is tested and run, with its report, its page and its sending checked; on
+# Linux ARM the published arm64 download is also built and checked as extracted. Everything else (formatting, vetting and building every
 # target, the same bytes twice, the run on Linux x86-64) is .forgejo/workflows/app.yml, on the homelab's own runner; GitHub is a
 # mirror of that Forgejo. GitHub's runners are virtual machines: a run shows the app starts and gives a valid report there, not
 # that real hardware reads correctly.
@@ -16,6 +16,8 @@ on:
       - tests/validate_report.py
       - tools/build-release.sh
       - tools/check-linux-download.sh
+      - tools/check-send.sh
+      - tests/fake_site.py
       - .github/workflows/app.yml
   pull_request:
 
@@ -51,7 +53,7 @@ jobs:
         shell: bash
         run: |
           go build -trimpath -o scan-app.exe ./cmd/mysetup-scan
-          ./scan-app.exe --cli > report.txt
+          ./scan-app.exe --cli < /dev/null > report.txt
           cat report.txt
           python3 -B tests/validate_report.py report.txt || python -B tests/validate_report.py report.txt
       # The page, as a browser uses it, without opening one: served, its download the same report, another site's Done refused,
@@ -76,6 +78,12 @@ jobs:
           for _ in $(seq 25); do kill -0 "$app" 2>/dev/null || break; sleep 0.2; done
           if kill -0 "$app" 2>/dev/null; then echo "The app did not end after Done."; kill "$app"; exit 1; fi
           wait "$app"
+      # Sending, end to end with a development build and a stand-in for MySetup on the runner: the page's send refused from
+      # another site, a wrong code answered in the site's words, the right one sending the same report; on Linux, the terminal
+      # asking for the code too.
+      - name: Sending on this runner
+        shell: bash
+        run: tools/check-send.sh
       # The arm64 download exactly as a release publishes it, on an ARM processor, as tools/check-linux-download.sh checks the
       # x86-64 one on the homelab's runner.
       - name: The Linux arm64 download works as extracted
