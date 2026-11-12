@@ -88,6 +88,27 @@ jobs:
           name: mysetup-scan-downloads
           path: ${{ runner.temp }}/dist/
           retention-days: 14
+      # Development builds for a test against staging (docs/app.md, Sending), kept beside the downloads: they send only to
+      # staging.mysetup.is and say they are for tests, and tools/build-release.sh refuses them, so they never become a download.
+      # The same source gives the same bytes, so a local build can be compared with SHA256SUMS.
+      - name: Development builds for a test on staging
+        run: |
+          dev=$RUNNER_TEMP/dev
+          mkdir -p "$dev/mysetup-scan-dev-linux-x86-64"
+          GOOS=windows GOARCH=amd64 go build -tags dev -buildvcs=false -trimpath -ldflags='-s -w -buildid=' \
+            -o "$dev/mysetup-scan-dev-windows-x86-64.exe" ./cmd/mysetup-scan
+          GOOS=linux GOARCH=amd64 go build -tags dev -buildvcs=false -trimpath -ldflags='-s -w -buildid=' \
+            -o "$dev/mysetup-scan-dev-linux-x86-64/mysetup-scan" ./cmd/mysetup-scan
+          chmod 0755 "$dev/mysetup-scan-dev-linux-x86-64" "$dev/mysetup-scan-dev-linux-x86-64/mysetup-scan"
+          tar --sort=name --format=gnu --owner=0 --group=0 --numeric-owner --mtime="@$(git log -1 --format=%ct)" \
+            -C "$dev" -cf - mysetup-scan-dev-linux-x86-64 | gzip -n -9 > "$dev/mysetup-scan-dev-linux-x86-64.tar.gz"
+          rm -r "$dev/mysetup-scan-dev-linux-x86-64"
+          (cd "$dev" && sha256sum mysetup-scan-dev-* > SHA256SUMS && cat SHA256SUMS)
+      - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
+        with:
+          name: mysetup-scan-dev-staging
+          path: ${{ runner.temp }}/dev/
+          retention-days: 14
 
   run:
     runs-on: ubuntu-24.04

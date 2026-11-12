@@ -216,7 +216,8 @@ every change. On MySetup's own Git server and its Linux runner, [`.forgejo/workf
 every target and builds every target twice, failing if the bytes differ. It lints and runs `tools/build-release.sh`, checks the
 Linux x86-64 `.tar.gz` as a member extracts it with `tools/check-linux-download.sh` (one folder, the program executable, its
 version, a valid report), runs the development build's tests and `tools/check-send.sh`, and keeps the downloads as a workflow
-artifact for 14 days. On GitHub, the mirror that receives every
+artifact for 14 days, beside development builds for Windows and Linux x86-64 for a test on staging
+(`mysetup-scan-dev-staging`). On GitHub, the mirror that receives every
 push, [`.github/workflows/app.yml`](../.github/workflows/app.yml) covers what that server has no runners for: Windows and macOS,
 and Windows and Linux on ARM processors, where it also checks the arm64 `.tar.gz` as extracted. GitHub's ARM runners are free
 for public repositories; like its others they are virtual machines, so they show the ARM programs run and give valid reports,
