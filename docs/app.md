@@ -4,7 +4,7 @@ A Go program that reads the same report as the scripts ([report-format.md](repor
 shows it on a page in your own browser, or in the terminal with `--cli`. The design and the operator's decisions are in MySetup's
 `docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is here: reading, and the two front
 ends. The site side (codes, upload, server checks), sending from the page, and code signing come in the next stages. Its current
-release candidate is `app-v0.1.0-rc.1`. The member's steps, for each system and both ways of starting it (double-click, or a
+release is `app-v0.1.0`, the first stable one (2026-11-12). The member's steps, for each system and both ways of starting it (double-click, or a
 terminal with `--cli`), are in the [README](../README.md).
 
 ## The page and the terminal
@@ -127,8 +127,13 @@ On GitHub's ARM runners (virtual machines on Microsoft's Cobalt 100 processors) 
 named no processor on Linux ARM, where `/proc/cpuinfo` gives none: it now asks the system's `lscpu`, as the script does. No real
 ARM computer has run the app yet.
 
-A double-click on a Linux desktop (a file manager starting the extracted program) has not been tried on a real machine yet; the
-operator's Ubuntu 26.04 laptop is next. The other systems are built and vetted for every target, and run on GitHub's macOS
+On 2026-11-12 the operator tried `0.1.0-rc.1` on a Linux desktop, his laptop with Ubuntu 26.04 and GNOME (an MSI laptop with an
+Intel Core i7-9750H, Intel and NVIDIA graphics, two DDR4 modules and an NVMe disk), as a member would, from the build page on
+mysetup.is. The page offered the download for Linux by itself. Extracted and double-clicked, the program started and opened its
+page in a browser tab; Copy report and Done worked, and Done ended the app. The report was valid (`tested=yes`,
+`physical`) and held nothing private.
+
+The other systems are built and vetted for every target, and run on GitHub's macOS
 runner, but no real machine of them has passed yet. The paths that need root (the firmware table on Linux without udev, `/dev/mem` on FreeBSD) are tested on a made-up table only.
 
 ## Build and test
@@ -160,7 +165,7 @@ page's own Done ends the app.
 
 ## Releases
 
-A release starts from a signed tag `app-v<version>`, such as `app-v0.1.0-rc.1`, matching `Version` and `Prerelease` in
+A release starts from a signed tag `app-v<version>`, such as `app-v0.1.0`, matching `Version` and `Prerelease` in
 [internal/scan/hardware.go](../internal/scan/hardware.go), with its notes in `docs/releases/`. The workflow
 [`app-release.yml`](../.github/workflows/app-release.yml) checks the version and runs
 [`tools/build-release.sh`](../tools/build-release.sh), which the homelab's CI also runs for every push. That script builds Windows
@@ -176,7 +181,7 @@ Anyone can rebuild a release and compare the bytes. Use the Go version in `go.mo
 release's tag, from a clone of any depth:
 
 ```sh
-git checkout app-v0.1.0-rc.1
+git checkout app-v0.1.0
 tools/build-release.sh dist
 cat dist/SHA256SUMS
 ```
@@ -192,5 +197,5 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflag
 `-buildvcs=false` keeps the clone's state out of the file. Since Go 1.24, a build otherwise stamps a version from the nearest tag,
 which a shallow clone does not have. The first test tag, `app-v0.1.0-beta.1`, was built without it and was never published; its
 files rebuild only from a shallow clone (it was deleted on the operator's word). `app-v0.1.0-beta.2` is the first test release,
-`app-v0.1.0-beta.3` and `app-v0.1.0-beta.4` replaced it in turn, and `app-v0.1.0-rc.1`, the first with the Linux `.tar.gz`, is
-the release candidate for the stable `0.1.0`.
+`app-v0.1.0-beta.3` and `app-v0.1.0-beta.4` replaced it in turn, and `app-v0.1.0-rc.1`, the first with the Linux `.tar.gz`, was
+the release candidate. `app-v0.1.0` (2026-11-12) is the first stable release: rc.1 with the processor's name on Linux ARM.
