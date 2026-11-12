@@ -59,10 +59,11 @@ instead: Smart App Control blocks apps that are not code-signed yet.
    On an ARM computer, such as a Raspberry Pi 4 or 5 with a 64-bit system, download
    [mysetup-scan-linux-arm64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-linux-arm64.tar.gz) instead; its names below end in `arm64`.
 2. Open your Downloads folder in your file manager (on Ubuntu, the **Files** app).
-3. Right-click **mysetup-scan-linux-x86-64.tar.gz** and click **Extract Here** (some file managers call it **Extract**). A folder
-   **mysetup-scan-linux-x86-64** appears.
-4. Double-click that folder to open it, then double-click **mysetup-scan** in it. If a box asks whether to run it, click **Run**
-   (some file managers call it **Execute**).
+3. Double-click **mysetup-scan-linux-x86-64.tar.gz**. Ubuntu's Files unpacks it into a new folder,
+   **mysetup-scan-linux-x86-64**. If your file manager shows what is inside the file instead, right-click the file and click
+   **Extract Here** (some file managers call it **Extract**).
+4. Double-click the folder **mysetup-scan-linux-x86-64** to open it, then double-click **mysetup-scan** in it. If a box asks
+   whether to run it, click **Run** (some file managers call it **Execute**).
 5. A page opens in your web browser with your report. Follow the steps on that page.
 
 The program in the download is already allowed to run; you do not need to change anything. If nothing happens at step 4, your file

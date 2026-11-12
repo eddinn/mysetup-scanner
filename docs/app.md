@@ -130,7 +130,8 @@ ARM computer has run the app yet.
 On 2026-11-12 the operator tried `0.1.0-rc.1` on a Linux desktop, his laptop with Ubuntu 26.04 and GNOME (an MSI laptop with an
 Intel Core i7-9750H, Intel and NVIDIA graphics, two DDR4 modules and an NVMe disk), as a member would, from the build page on
 mysetup.is. The page offered the download for Linux by itself. Extracted and double-clicked, the program started and opened its
-page in a browser tab; Copy report and Done worked, and Done ended the app. The report was valid (`tested=yes`,
+page in a browser tab; Copy report and Done worked, and Done ended the app. A double-click on the `.tar.gz` in Ubuntu's Files
+unpacked it into a folder of its own, so the README's steps use that, with right-click Extract for other file managers. The report was valid (`tested=yes`,
 `physical`) and held nothing private.
 
 The other systems are built and vetted for every target, and run on GitHub's macOS
