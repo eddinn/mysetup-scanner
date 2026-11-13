@@ -1,17 +1,21 @@
 // Package smbios reads the firmware's SMBIOS table, by structure type and field offset as the DMTF specification (DSP0134)
-// sets them. Only what the report needs is taken: the system's maker and model (to tell a virtual machine), the board's
-// maker and model, the processors' core and thread counts, and each memory device's size, maker, part number, speeds, type
-// and form. Serial numbers, asset tags, UUIDs and slot names live in the same structures and are never read.
+// sets them. Only what the report needs is taken: the computer's maker, model, family, version and SKU, which name its model
+// (and tell a virtual machine), and its chassis type; the board's maker and model; the processors' core and thread counts; and
+// each memory device's size, maker, part number, speeds, type and form. Serial numbers, asset tags, UUIDs and slot names live in
+// the same structures and are never read.
 package smbios
 
 import "encoding/binary"
 
 // Table is what was read from one SMBIOS table.
 type Table struct {
-	SystemMaker, SystemModel string
-	BoardMaker, BoardModel   string
-	Processors               []Processor
-	Memory                   []MemoryDevice
+	SystemMaker, SystemModel               string
+	SystemFamily, SystemVersion, SystemSKU string
+	// Chassis is the chassis type's name (ChassisName), such as "notebook"; empty when unknown.
+	Chassis                string
+	BoardMaker, BoardModel string
+	Processors             []Processor
+	Memory                 []MemoryDevice
 }
 
 // Processor is one populated processor socket.
@@ -53,7 +57,14 @@ func Parse(data []byte) Table {
 		strs := data[at+length : end]
 		switch kind {
 		case 1:
-			t.SystemMaker, t.SystemModel = str(formatted, strs, 0x04), str(formatted, strs, 0x05)
+			// 0x07 is the serial number and 0x08 to 0x17 the UUID: never read.
+			t.SystemMaker, t.SystemModel, t.SystemVersion = str(formatted, strs, 0x04), str(formatted, strs, 0x05), str(formatted, strs, 0x06)
+			t.SystemSKU, t.SystemFamily = str(formatted, strs, 0x19), str(formatted, strs, 0x1A)
+		case 3:
+			// Only the type: 0x07 is the serial number and 0x08 the asset tag, never read.
+			if len(formatted) > 0x05 {
+				t.Chassis = ChassisName(formatted[0x05])
+			}
 		case 2:
 			t.BoardMaker, t.BoardModel = str(formatted, strs, 0x04), str(formatted, strs, 0x05)
 		case 4:
@@ -137,6 +148,20 @@ func memory(f, strs []byte) (MemoryDevice, bool) {
 	}
 
 	return m, true
+}
+
+// chassisNames are DSP0134's chassis types (7.4.1) as the report writes them; "Other" and "Unknown" are left out.
+var chassisNames = map[byte]string{0x03: "desktop", 0x04: "low-profile-desktop", 0x05: "pizza-box", 0x06: "mini-tower", 0x07: "tower",
+	0x08: "portable", 0x09: "laptop", 0x0A: "notebook", 0x0B: "hand-held", 0x0C: "docking-station", 0x0D: "all-in-one",
+	0x0E: "sub-notebook", 0x0F: "space-saving", 0x10: "lunch-box", 0x11: "main-server-chassis", 0x12: "expansion-chassis",
+	0x13: "sub-chassis", 0x14: "bus-expansion-chassis", 0x15: "peripheral-chassis", 0x16: "raid-chassis", 0x17: "rack-mount-chassis",
+	0x18: "sealed-case-pc", 0x19: "multi-system-chassis", 0x1A: "compact-pci", 0x1B: "advanced-tca", 0x1C: "blade",
+	0x1D: "blade-enclosure", 0x1E: "tablet", 0x1F: "convertible", 0x20: "detachable", 0x21: "iot-gateway", 0x22: "embedded-pc",
+	0x23: "mini-pc", 0x24: "stick-pc"}
+
+// ChassisName is a chassis type's name, as Linux's chassis_type file gives the number too; the top bit (a lock) is ignored.
+func ChassisName(kind byte) string {
+	return chassisNames[kind&0x7F]
 }
 
 // str is the string a formatted field points to, counting from 1; 0 or a missing string is empty.

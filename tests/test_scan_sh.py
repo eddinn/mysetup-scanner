@@ -152,7 +152,12 @@ def linux_common(computer: Computer) -> None:
         computer.file(f"sys/class/dmi/id/{name}", "FAKE-SERIAL\n")
     computer.file("sys/class/dmi/id/board_vendor", "ASUSTeK COMPUTER INC.\n")
     computer.file("sys/class/dmi/id/board_name", "PRIME Z270-K\n")
-    computer.file("sys/class/dmi/id/product_name", "FAKE-HOST\n")
+    # A built computer's firmware names no model of its own, and says so with placeholders, which are dropped.
+    computer.file("sys/class/dmi/id/sys_vendor", "System manufacturer\n")
+    computer.file("sys/class/dmi/id/product_name", "System Product Name\n")
+    computer.file("sys/class/dmi/id/product_sku", "SKU\n")
+    computer.file("sys/class/dmi/id/chassis_type", "3\n")
+    computer.file("sys/class/dmi/id/chassis_asset_tag", "FAKE-TAG\n")
     computer.file("etc/hostname", "FAKE-HOST\n")
     computer.command("hostname", {}, default="FAKE-HOST")
     computer.command("whoami", {}, default="FAKE-USER")
@@ -271,13 +276,14 @@ def desktop(awk: str | None = None) -> Computer:
 
 
 DESKTOP_REPORT = """mysetup-report 1
-source=script-sh/0.1.0
+source=script-sh/0.2.0
 tested=yes
 os.family=linux
 os.name=debian
 os.version=12
 os.architecture=x86-64
 environment=physical
+system.chassis=desktop
 cpu.vendor=Intel
 cpu.model=Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz
 cpu.cores=4
@@ -462,7 +468,9 @@ def freebsd(awk: str | None = None) -> Computer:
     )
     computer.command(
         "kenv",
-        {"-q smbios.planar.maker": "Gigabyte Technology Co., Ltd.", "-q smbios.planar.product": "X570 AORUS ELITE", "-q smbios.planar.serial": "FAKE-SERIAL"},
+        {"-q smbios.planar.maker": "Gigabyte Technology Co., Ltd.", "-q smbios.planar.product": "X570 AORUS ELITE", "-q smbios.planar.serial": "FAKE-SERIAL",
+         "-q smbios.system.maker": "Gigabyte Technology Co., Ltd.", "-q smbios.system.product": "X570 AORUS ELITE", "-q smbios.system.serial": "FAKE-SERIAL",
+         "-q smbios.system.uuid": "FAKE-SERIAL"},
     )
     computer.command(
         "geom",
@@ -619,6 +627,7 @@ class Reports(Base):
         self.assertEqual(report.fields["gpu.0.vendor"], "Intel")
         self.assertEqual(report.fields["gpu.1.model"], "AMD Radeon Pro 5300M")
         self.assertEqual(report.fields["motherboard.model"], "MacBookPro16,1")
+        self.assertEqual([report.fields["system.vendor"], report.fields["system.model"]], ["Apple", "MacBookPro16,1"])
         self.assertEqual(report.fields["memory.total_mb"], "16384")
         self.assertEqual(report.fields["memory.0.size_mb"], "8192")
         self.assertEqual(report.fields["memory.0.part"], "0x484D")
@@ -636,6 +645,7 @@ class Reports(Base):
         report = Report(result.stdout)
         self.assertEqual(report.fields["os.architecture"], "arm64")
         self.assertEqual(report.fields["environment"], "virtual_machine")
+        self.assertFalse([field for field in report.fields if field.startswith("system.")], "a virtual machine's model is never written")
         self.assertEqual(report.fields["cpu.vendor"], "Apple")
         self.assertEqual(report.fields["gpu.0.vendor"], "Apple")
         self.assertEqual(report.fields["memory.0.size_mb"], "16384")
@@ -654,6 +664,7 @@ class Reports(Base):
         self.assertEqual(report.fields["gpu.0.pci"], "10de:2204")
         self.assertEqual(report.fields["gpu.0.subsystem"], "1458:4037")
         self.assertEqual(report.fields["motherboard.model"], "X570 AORUS ELITE")
+        self.assertEqual([report.fields["system.vendor"], report.fields["system.model"]], ["Gigabyte Technology Co., Ltd.", "X570 AORUS ELITE"])
         self.assertEqual(report.fields["storage.0.interface"], "nvme")
         self.assertEqual(report.fields["storage.1.media"], "hdd")
         self.assertNotIn("storage.2.model", report.fields)
@@ -719,6 +730,24 @@ class Environments(Base):
                 computer = desktop()
                 computer.command("systemd-detect-virt", {}, default=answer)
                 self.assertEqual(self.environment(computer), expected)
+
+    def test_a_laptop_names_its_model_and_a_virtual_machine_never(self) -> None:
+        # The operator, 2026-11-13: "we need to match models". A virtual machine's model fields can hold anything, its host's name
+        # among them: never written there.
+        computer = desktop()
+        for name, value in (("sys_vendor", "Micro-Star International Co., Ltd."), ("product_name", "GL65 Leopard 9SCSR"), ("product_family", "GL"),
+                            ("product_version", "REV:1.0"), ("product_sku", "16R3.1"), ("chassis_type", "10")):
+            computer.file(f"sys/class/dmi/id/{name}", value + "\n")
+        report = Report(self.scan(computer).stdout)
+        self.assertEqual({field: value for field, value in report.fields.items() if field.startswith("system.")},
+                         {"system.vendor": "Micro-Star International Co., Ltd.", "system.model": "GL65 Leopard 9SCSR", "system.family": "GL",
+                          "system.version": "REV:1.0", "system.sku": "16R3.1", "system.chassis": "notebook"})
+        computer = desktop()
+        computer.file("sys/class/dmi/id/product_name", "FAKE-HOST\n")
+        computer.command("systemd-detect-virt", {}, default="kvm")
+        report = Report(self.scan(computer).stdout)
+        self.assertEqual(report.fields["environment"], "virtual_machine")
+        self.assertFalse([field for field in report.fields if field.startswith("system.")])
 
     def test_without_systemd_the_cpu_flags_decide(self) -> None:
         computer = minimal_linux()
@@ -836,7 +865,7 @@ class Behaviour(Base):
     def test_help_version_and_refusals(self) -> None:
         computer = self.keep(desktop())
         self.assertIn("--with-root", computer.run("--help").stdout)
-        self.assertIn("0.1.0", computer.run("--version").stdout)
+        self.assertIn("0.2.0", computer.run("--version").stdout)
         refused = computer.run("--nonsense")
         self.assertEqual(refused.returncode, 2)
         self.assertEqual(refused.stdout, "")

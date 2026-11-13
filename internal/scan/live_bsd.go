@@ -52,9 +52,11 @@ func Read() Hardware {
 		src.Firmware = freebsdFirmware
 		h = ReadFreeBSD(src)
 	case "openbsd":
-		h = ReadSysctlBasics(src, "openbsd", "hw.model", "hw.ncpuonline", "hw.physmem", "hw.vendor", "hw.product")
+		// OpenBSD's hw.vendor and hw.product name the computer, and were read as the board before 0.2.0; it names no board apart.
+		h = ReadSysctlBasics(src, "openbsd", "hw.model", "hw.ncpuonline", "hw.physmem", "hw.vendor", "hw.product", "hw.vendor", "hw.product")
 	case "netbsd":
-		h = ReadSysctlBasics(src, "netbsd", "machdep.cpu_brand", "hw.ncpuonline", "hw.physmem64", "machdep.dmi.board-vendor", "machdep.dmi.board-product")
+		h = ReadSysctlBasics(src, "netbsd", "machdep.cpu_brand", "hw.ncpuonline", "hw.physmem64", "machdep.dmi.system-vendor",
+			"machdep.dmi.system-product", "machdep.dmi.board-vendor", "machdep.dmi.board-product")
 	}
 	h.FinalNotes()
 

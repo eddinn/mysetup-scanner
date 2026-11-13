@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -160,6 +159,19 @@ func ownWindow() bool {
 	return n == 1
 }
 
+// canAsk says whether the app can ask the member for a code: it reads and writes a console, not a pipe or a file another
+// program gave it, so a member sees the question and can answer it.
+func canAsk() bool {
+	for _, f := range []*os.File{os.Stdin, os.Stderr} {
+		var mode uint32
+		if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) != nil {
+			return false
+		}
+	}
+
+	return true
+}
+
 // copyToClipboard puts the report on the clipboard as text, for the member to paste. It writes nothing to disk.
 func copyToClipboard(text string) bool {
 	const cfUnicodeText, gmemMoveable = 13, 0x0002
@@ -193,17 +205,24 @@ func copyToClipboard(text string) bool {
 	return true
 }
 
-// keepWindowOpen, in a window of its own, copies the report to the clipboard, says so, and waits for Enter before the window closes.
-func keepWindowOpen(report string, stderr io.Writer) {
+// keepWindowOpen, in a window of its own, waits for Enter before the window closes, and first, unless the report was sent, copies
+// it to the clipboard and says so.
+func keepWindowOpen(report string, sent bool, stderr io.Writer) {
 	if !ownWindow() {
 		return
 	}
 	fmt.Fprintln(stderr)
+	if sent {
+		fmt.Fprintln(stderr, "Press Enter here to close this window.")
+		_, _ = input.ReadString('\n')
+
+		return
+	}
 	if copyToClipboard(report) {
 		fmt.Fprintln(stderr, "The report is already copied for you, so you can skip step 1.")
 	} else {
 		fmt.Fprintln(stderr, "The report could not be copied for you, so do step 1 yourself.")
 	}
 	fmt.Fprintln(stderr, "When you have pasted it on your build page, press Enter here to close this window.")
-	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
+	_, _ = input.ReadString('\n')
 }

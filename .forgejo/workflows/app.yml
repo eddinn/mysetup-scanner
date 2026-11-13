@@ -2,7 +2,7 @@ name: App
 
 # The Go app (docs/app.md) on the homelab's Forgejo and its Linux runner: formatted, vetted for every target, tested, built
 # without C for every target and built twice to show the same source gives the same bytes, then run on the runner with its
-# report and its page checked. The runner is a container: a run shows the app starts and gives a valid report there, not that
+# report, its page and its sending checked. The runner is a container: a run shows the app starts and gives a valid report there, not that
 # real hardware reads correctly. The same run on Windows and macOS is GitHub's (.github/workflows/app.yml), which gets every
 # push through the mirror. A failed run emails whoever pushed.
 on:
@@ -15,6 +15,8 @@ on:
       - tests/validate_report.py
       - tools/build-release.sh
       - tools/check-linux-download.sh
+      - tools/check-send.sh
+      - tests/fake_site.py
       - .forgejo/workflows/app.yml
   pull_request:
 
@@ -49,6 +51,11 @@ jobs:
           done
       - name: Made-up computers
         run: go test -count=1 ./...
+      # A development build (go build -tags dev) may send to staging or this computer, never elsewhere: its own tests.
+      - name: The development build
+        run: |
+          go vet -tags dev ./...
+          go test -count=1 -tags dev ./...
       # -buildvcs=false, as the release builds: the bytes depend on the source and Go's version alone, not on the clone's tags or
       # state. Every target the app supports, the ones not published too; built outside the checkout, which the last check keeps
       # clean.
@@ -64,7 +71,7 @@ jobs:
       - name: The release scripts, linted
         run: |
           command -v shellcheck >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck; }
-          shellcheck tools/build-release.sh tools/check-linux-download.sh
+          shellcheck tools/build-release.sh tools/check-linux-download.sh tools/check-send.sh
       # The downloads exactly as a release publishes them (tools/build-release.sh, which GitHub's release workflow runs too):
       # Windows and Linux, each built twice and refused if the bytes differ, Linux as its .tar.gz.
       - name: The downloads, as a release builds them
@@ -80,6 +87,27 @@ jobs:
         with:
           name: mysetup-scan-downloads
           path: ${{ runner.temp }}/dist/
+          retention-days: 14
+      # Development builds for a test against staging (docs/app.md, Sending), kept beside the downloads: they send only to
+      # staging.mysetup.is and say they are for tests, and tools/build-release.sh refuses them, so they never become a download.
+      # The same source gives the same bytes, so a local build can be compared with SHA256SUMS.
+      - name: Development builds for a test on staging
+        run: |
+          dev=$RUNNER_TEMP/dev
+          mkdir -p "$dev/mysetup-scan-dev-linux-x86-64"
+          GOOS=windows GOARCH=amd64 go build -tags dev -buildvcs=false -trimpath -ldflags='-s -w -buildid=' \
+            -o "$dev/mysetup-scan-dev-windows-x86-64.exe" ./cmd/mysetup-scan
+          GOOS=linux GOARCH=amd64 go build -tags dev -buildvcs=false -trimpath -ldflags='-s -w -buildid=' \
+            -o "$dev/mysetup-scan-dev-linux-x86-64/mysetup-scan" ./cmd/mysetup-scan
+          chmod 0755 "$dev/mysetup-scan-dev-linux-x86-64" "$dev/mysetup-scan-dev-linux-x86-64/mysetup-scan"
+          tar --sort=name --format=gnu --owner=0 --group=0 --numeric-owner --mtime="@$(git log -1 --format=%ct)" \
+            -C "$dev" -cf - mysetup-scan-dev-linux-x86-64 | gzip -n -9 > "$dev/mysetup-scan-dev-linux-x86-64.tar.gz"
+          rm -r "$dev/mysetup-scan-dev-linux-x86-64"
+          (cd "$dev" && sha256sum mysetup-scan-dev-* > SHA256SUMS && cat SHA256SUMS)
+      - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
+        with:
+          name: mysetup-scan-dev-staging
+          path: ${{ runner.temp }}/dev/
           retention-days: 14
 
   run:
@@ -97,7 +125,7 @@ jobs:
         shell: bash
         run: |
           go build -trimpath -o scan-app.exe ./cmd/mysetup-scan
-          ./scan-app.exe --cli > report.txt
+          ./scan-app.exe --cli < /dev/null > report.txt
           cat report.txt
           python3 -B tests/validate_report.py report.txt || python -B tests/validate_report.py report.txt
       # The page, as a browser uses it, without opening one: served, its download the same report, another site's Done refused,
@@ -122,3 +150,9 @@ jobs:
           for _ in $(seq 25); do kill -0 "$app" 2>/dev/null || break; sleep 0.2; done
           if kill -0 "$app" 2>/dev/null; then echo "The app did not end after Done."; kill "$app"; exit 1; fi
           wait "$app"
+      # Sending, end to end with a development build and a stand-in for MySetup on the runner: the page's send refused from
+      # another site, a wrong code answered in the site's words, the right one sending the same report; on Linux, the terminal
+      # asking for the code too.
+      - name: Sending on this runner
+        shell: bash
+        run: tools/check-send.sh

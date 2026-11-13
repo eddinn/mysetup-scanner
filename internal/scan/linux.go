@@ -36,6 +36,7 @@ func ReadLinux(src LinuxSource) Hardware {
 	}
 	h.CPU = linuxCPU(src)
 	h.GPUs = linuxGPUs(src.FS, &h)
+	h.System = linuxSystem(src.FS)
 	h.Board = Board{Vendor: firstLine(src.FS, "sys/class/dmi/id/board_vendor"), Model: firstLine(src.FS, "sys/class/dmi/id/board_name")}
 	if h.Board.Model == "" {
 		h.Board.Model = firstLine(src.FS, "proc/device-tree/model")
@@ -45,6 +46,19 @@ func ReadLinux(src LinuxSource) Hardware {
 	h.Disks = linuxDisks(src.FS)
 
 	return h
+}
+
+// linuxSystem reads the computer's model from the firmware's files, by name: product_serial, product_uuid and chassis_serial
+// and chassis_asset_tag beside them are never read.
+func linuxSystem(fsys fs.FS) System {
+	dmi := func(name string) string { return firstLine(fsys, "sys/class/dmi/id/"+name) }
+	s := System{Vendor: dmi("sys_vendor"), Model: dmi("product_name"), Family: dmi("product_family"), Version: dmi("product_version"),
+		SKU: dmi("product_sku")}
+	if kind, err := strconv.Atoi(dmi("chassis_type")); err == nil && kind > 0 && kind < 256 {
+		s.Chassis = smbios.ChassisName(byte(kind))
+	}
+
+	return s
 }
 
 func linuxEnvironment(fsys fs.FS) string {

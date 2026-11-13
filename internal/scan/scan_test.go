@@ -47,6 +47,12 @@ func madeUpLinux() fstest.MapFS {
 		"sys/class/dmi/id/board_serial":                     file("FAKE-SERIAL\n"),
 		"sys/class/dmi/id/product_uuid":                     file("12345678-1234-1234-1234-123456789abc\n"),
 		"sys/class/dmi/id/sys_vendor":                       file("ASUS\n"),
+		"sys/class/dmi/id/product_name":                     file("System Product Name\n"),
+		"sys/class/dmi/id/product_sku":                      file("SKU\n"),
+		"sys/class/dmi/id/product_serial":                   file("FAKE-SERIAL\n"),
+		"sys/class/dmi/id/chassis_type":                     file("3\n"),
+		"sys/class/dmi/id/chassis_serial":                   file("FAKE-SERIAL\n"),
+		"sys/class/dmi/id/chassis_asset_tag":                file("FAKE-TAG\n"),
 		"sys/bus/pci/devices/0000:01:00.0/class":            file("0x030000\n"),
 		"sys/bus/pci/devices/0000:01:00.0/vendor":           file("0x10de\n"),
 		"sys/bus/pci/devices/0000:01:00.0/device":           file("0x2204\n"),
@@ -87,7 +93,8 @@ func TestLinuxReadsItsOwnFilesAndNothingPrivate(t *testing.T) {
 	text := h.Report().Text()
 	assertClean(t, h, text)
 	assertLines(t, text, "source=app/"+Version, "tested=yes", "os.family=linux", "os.name=debian", "os.version=13", "os.architecture=x86-64",
-		"environment=physical", "cpu.vendor=AMD", "cpu.model=AMD Ryzen 7 7800X3D 8-Core Processor", "cpu.cores=3", "cpu.threads=4",
+		"environment=physical", "system.vendor=ASUS", "system.chassis=desktop",
+		"cpu.vendor=AMD", "cpu.model=AMD Ryzen 7 7800X3D 8-Core Processor", "cpu.cores=3", "cpu.threads=4",
 		"gpu.0.pci=10de:2204", "gpu.0.subsystem=1458:4037", "gpu.0.vendor=NVIDIA Corporation", "gpu.0.model=GA102 [GeForce RTX 3090]",
 		"motherboard.vendor=ASUSTeK COMPUTER INC.", "motherboard.model=ROG STRIX X670E-E GAMING WIFI", "memory.total_mb=31890",
 		"memory.0.size_mb=16384", "memory.0.maker=Corsair", "memory.0.part=CMK32GX5M2B6000C30", "memory.0.speed_mts=6000",
@@ -98,6 +105,24 @@ func TestLinuxReadsItsOwnFilesAndNothingPrivate(t *testing.T) {
 	if strings.Contains(text, "memory.1.") || strings.Contains(text, "storage.2.") || len(h.Notes) != 0 {
 		t.Fatalf("an empty slot, a loop device or a note came through:\n%s\n%v", text, h.Notes)
 	}
+	// A built computer's firmware names no model of its own: the placeholders are dropped.
+	if strings.Contains(text, "system.model") || strings.Contains(text, "system.sku") {
+		t.Fatalf("a placeholder came through:\n%s", text)
+	}
+}
+
+// A laptop names its model (the operator, 2026-11-13: "we need to match models"), never its serial number.
+func TestLinuxNamesALaptopsModel(t *testing.T) {
+	fsys := madeUpLinux()
+	for name, value := range map[string]string{"sys_vendor": "Micro-Star International Co., Ltd.", "product_name": "GL65 Leopard 9SCSR",
+		"product_family": "GL", "product_version": "REV:1.0", "product_sku": "16R3.1", "chassis_type": "10", "product_serial": "FAKE-SERIAL"} {
+		fsys["sys/class/dmi/id/"+name] = file(value + "\n")
+	}
+	h := ReadLinux(LinuxSource{FS: fsys, Machine: "x86_64"})
+	text := h.Report().Text()
+	assertClean(t, h, text)
+	assertLines(t, text, "system.vendor=Micro-Star International Co., Ltd.", "system.model=GL65 Leopard 9SCSR", "system.family=GL",
+		"system.version=REV:1.0", "system.sku=16R3.1", "system.chassis=notebook")
 }
 
 // On ARM, /proc/cpuinfo names no processor: the system's own lscpu does, as for the script. Where the file names it, lscpu is not run.
@@ -195,6 +220,8 @@ func TestWindowsReadsTheFirmwareAndDevicesWithoutPrivateParts(t *testing.T) {
 	assertLines(t, text, "tested=yes", "os.version=10.0.26100", "os.architecture=x86-64", "environment=physical", "cpu.vendor=Intel",
 		"cpu.model=13th Gen Intel(R) Core(TM) i9-13900KF", "cpu.cores=8", "cpu.threads=16", "gpu.0.pci=10de:2782", "gpu.0.subsystem=1043:88a7",
 		"gpu.0.model=NVIDIA GeForce RTX 4070 Ti", "motherboard.model=ROG STRIX X670E-E", "memory.total_mb=65292", "memory.0.size_mb=32768",
+		"system.vendor=Micro-Star International Co., Ltd.", "system.model=GL65 Leopard 9SCSR", "system.family=GL", "system.version=REV:1.0",
+		"system.sku=16R3.1", "system.chassis=notebook",
 		"storage.0.interface=nvme", "storage.0.media=ssd", "storage.1.model=Portable SSD T5", "storage.1.interface=usb")
 	if strings.Contains(text, "gpu.1.") || strings.Contains(text, "storage.2.") || strings.Contains(text, "storage.1.media") {
 		t.Fatalf("a virtual adapter or disk, or a USB disk's media, came through:\n%s", text)
@@ -223,6 +250,7 @@ func TestMacOSReadsByExactKey(t *testing.T) {
 	assertClean(t, h, text)
 	assertLines(t, text, "os.family=macos", "os.version=15.1", "os.architecture=arm64", "environment=physical", "cpu.vendor=Apple", "cpu.model=Apple M2",
 		"gpu.0.pci=106b:0000", "gpu.0.vendor=Apple", "gpu.0.model=Apple M2", "motherboard.vendor=Apple", "motherboard.model=Mac14,2",
+		"system.vendor=Apple", "system.model=Mac14,2",
 		"memory.total_mb=16384", "memory.0.size_mb=16384", "memory.0.maker=Hynix", "memory.0.type=LPDDR5", "storage.0.model=APPLE SSD AP0512Z",
 		"storage.0.size_bytes=500277790720", "storage.0.interface=apple-fabric", "storage.0.media=ssd", "capability.configured_memory.reason=not-exposed")
 }
@@ -234,6 +262,11 @@ func TestFreeBSDReadsByExactKeyAndNeedsRootForModules(t *testing.T) {
 			"xhci0@pci0:0:20:0:\tclass=0x0c0330 vendor=0x8086 device=0x7ae0\n",
 		"kenv -q smbios.planar.maker":   "ASUSTeK COMPUTER INC.\n",
 		"kenv -q smbios.planar.product": "PRIME B550M-A\n",
+		"kenv -q smbios.system.maker":   "LENOVO\n",
+		"kenv -q smbios.system.product": "20QV00CEUS\n",
+		"kenv -q smbios.system.version": "ThinkPad X1 Carbon 7th\n",
+		"kenv -q smbios.system.family":  "ThinkPad X1 Carbon 7th\n",
+		"kenv -q smbios.system.serial":  "FAKE-SERIAL\n",
 		"geom disk list": "Geom name: nda0\nProviders:\n1. Name: nda0\n   Mediasize: 1000204886016 (932G)\n   descr: WD Blue SN570 1TB\n" +
 			"   ident: FAKE-SERIAL\n   rotationrate: 0\n\nGeom name: cd0\n   Mediasize: 0 (0B)\n",
 	}
@@ -246,8 +279,72 @@ func TestFreeBSDReadsByExactKeyAndNeedsRootForModules(t *testing.T) {
 	assertClean(t, h, text)
 	assertLines(t, text, "os.version=14.1-RELEASE-p5", "environment=physical", "cpu.vendor=AMD", "cpu.cores=6", "cpu.threads=12", "gpu.0.pci=10de:2204",
 		"gpu.0.subsystem=1458:4037", "motherboard.model=PRIME B550M-A", "memory.total_mb=32768", "storage.0.model=WD Blue SN570 1TB",
+		"system.vendor=LENOVO", "system.model=20QV00CEUS", "system.version=ThinkPad X1 Carbon 7th", "system.family=ThinkPad X1 Carbon 7th",
 		"storage.0.interface=nvme", "storage.0.media=ssd", "capability.memory_modules.reason=needs-root", "tested=no")
 	if strings.Contains(text, "gpu.1.") || strings.Contains(text, "storage.1.") {
 		t.Fatalf("a non-display device or the CD drive came through:\n%s", text)
+	}
+}
+
+// illumos's smbios tool, by exact key: the computer's model, its chassis type from "Chassis Type: 0xa (notebook)", and never a
+// serial number, UUID or asset tag.
+func TestIllumosNamesTheComputersModelAndChassis(t *testing.T) {
+	outputs := map[string]string{
+		"psrinfo -pv": "The physical processor has 8 cores and 16 virtual processors (0-15)\n  AMD Ryzen 7 5800X 8-Core Processor\n",
+		"psrinfo":     strings.Repeat("0 on-line since 01/01/2026\n", 16),
+		"prtconf -m":  "32768\n",
+		"smbios -t SMB_TYPE_SYSTEM": "ID    SIZE TYPE\n1     109  SMB_TYPE_SYSTEM (type 1) (system information)\n\n  Manufacturer: LENOVO\n" +
+			"  Product: 20QV00CEUS\n  Version: ThinkPad X1 Carbon 7th\n  Serial Number: FAKE-SERIAL\n\n  UUID: 12345678-1234-1234-1234-123456789abc\n" +
+			"  Wake-Up Event: 0x6 (power switch)\n  SKU Number: LENOVO_MT_20QV_BU_Think_FM_ThinkPad X1 Carbon 7th\n  Family: ThinkPad X1 Carbon 7th\n",
+		"smbios -t SMB_TYPE_CHASSIS": "  Manufacturer: LENOVO\n  Version: None\n  Serial Number: FAKE-SERIAL\n  Asset Tag: FAKE-TAG\n\n" +
+			"  OEM Data: 0x0\n  SKU Number: <unknown>\n  Lock Present: N\n  Chassis Type: 0xa (notebook)\n",
+		"smbios -t SMB_TYPE_BASEBOARD": "  Manufacturer: LENOVO\n  Product: 20QV00CEUS\n  Serial Number: FAKE-SERIAL\n",
+	}
+	h := ReadIllumos(UnixSource{Sysctl: func(string) string { return "" },
+		Run: func(tool string, args ...string) []byte { return []byte(outputs[tool+" "+strings.Join(args, " ")]) }, Machine: "i86pc"})
+	want := System{Vendor: "LENOVO", Model: "20QV00CEUS", Family: "ThinkPad X1 Carbon 7th", Version: "ThinkPad X1 Carbon 7th",
+		SKU: "LENOVO_MT_20QV_BU_Think_FM_ThinkPad X1 Carbon 7th", Chassis: "notebook"}
+	if h.System != want {
+		t.Fatalf("system: %+v", h.System)
+	}
+	// illumos cannot tell a virtual machine yet, and a virtual machine's model fields can hold anything: not written.
+	text := h.Report().Text()
+	assertClean(t, h, text)
+	if strings.Contains(text, "system.") {
+		t.Fatalf("the model of a computer that may be virtual was written:\n%s", text)
+	}
+	h.Environment = "physical"
+	assertLines(t, h.Report().Text(), "system.vendor=LENOVO", "system.model=20QV00CEUS", "system.chassis=notebook")
+}
+
+// A virtual machine's model fields can be set to anything, its host's name among them: never written.
+func TestAVirtualMachinesModelIsNeverWritten(t *testing.T) {
+	fsys := madeUpLinux()
+	fsys["proc/cpuinfo"] = file("processor\t: 0\nmodel name\t: QEMU Virtual CPU\nflags\t\t: fpu hypervisor\n")
+	fsys["sys/class/dmi/id/sys_vendor"] = file("QEMU\n")
+	fsys["sys/class/dmi/id/product_name"] = file("FAKE-HOST\n")
+	h := ReadLinux(LinuxSource{FS: fsys, Machine: "x86_64"})
+	text := h.Report().Text()
+	if h.Environment != "virtual_machine" || strings.Contains(text, "system.") || strings.Contains(text, "FAKE-HOST") {
+		t.Fatalf("%s:\n%s", h.Environment, text)
+	}
+}
+
+// OpenBSD's hw.vendor and hw.product name the computer; NetBSD names the computer and the board apart.
+func TestOpenBSDAndNetBSDNameTheComputersModel(t *testing.T) {
+	sysctls := map[string]string{"hw.vendor": "Dell Inc.", "hw.product": "OptiPlex 7090", "hw.model": "Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz",
+		"hw.ncpuonline": "16", "machdep.dmi.system-vendor": "HP", "machdep.dmi.system-product": "HP EliteDesk 800 G6 Desktop Mini PC",
+		"machdep.dmi.board-vendor": "HP", "machdep.dmi.board-product": "870C", "machdep.cpu_brand": "Intel(R) Core(TM) i5-10500T CPU @ 2.30GHz"}
+	src := UnixSource{Sysctl: func(name string) string { return sysctls[name] }, Run: func(string, ...string) []byte { return nil }, Machine: "amd64"}
+	open := ReadSysctlBasics(src, "openbsd", "hw.model", "hw.ncpuonline", "hw.physmem", "hw.vendor", "hw.product", "hw.vendor", "hw.product")
+	net := ReadSysctlBasics(src, "netbsd", "machdep.cpu_brand", "hw.ncpuonline", "hw.physmem64", "machdep.dmi.system-vendor",
+		"machdep.dmi.system-product", "machdep.dmi.board-vendor", "machdep.dmi.board-product")
+	if open.System != (System{Vendor: "Dell Inc.", Model: "OptiPlex 7090"}) || net.System != (System{Vendor: "HP", Model: "HP EliteDesk 800 G6 Desktop Mini PC"}) ||
+		net.Board.Model != "870C" {
+		t.Fatalf("openbsd %+v, netbsd %+v %+v", open.System, net.System, net.Board)
+	}
+	// Neither can tell a virtual machine yet: the model is not written (TestAVirtualMachinesModelIsNeverWritten).
+	if strings.Contains(open.Report().Text(), "system.") || strings.Contains(net.Report().Text(), "system.") {
+		t.Fatal("the model of a computer that may be virtual was written")
 	}
 }

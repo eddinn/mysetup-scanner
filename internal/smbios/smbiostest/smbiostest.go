@@ -22,6 +22,9 @@ func MadeUpTable() []byte {
 	system := make([]byte, 0x1B)
 	system[4], system[5], system[6], system[7] = 1, 2, 3, 4
 	copy(system[8:], "FAKE-UUID-BYTES!") // The UUID, binary, at 0x08.
+	system[0x19], system[0x1A] = 5, 6    // SKU and family.
+	chassis := make([]byte, 0x0D)
+	chassis[4], chassis[5], chassis[6], chassis[7], chassis[8] = 1, 0x80|0x0A, 2, 3, 4 // A locked notebook; version, serial, tag.
 	board := make([]byte, 0x0F)
 	board[4], board[5], board[6], board[7], board[8] = 1, 2, 3, 4, 5
 	cpu := make([]byte, 0x30)
@@ -42,7 +45,8 @@ func MadeUpTable() []byte {
 		return m
 	}
 	var table []byte
-	table = append(table, Structure(1, system, "ASUSTeK COMPUTER INC.", "System Product Name", "Rev 1.xx", "FAKE-SERIAL")...)
+	table = append(table, Structure(1, system, "Micro-Star International Co., Ltd.", "GL65 Leopard 9SCSR", "REV:1.0", "FAKE-SERIAL", "16R3.1", "GL")...)
+	table = append(table, Structure(3, chassis, "Micro-Star International Co., Ltd.", "N/A", "FAKE-SERIAL", "FAKE-TAG")...)
 	table = append(table, Structure(2, board, "ASUSTeK COMPUTER INC.", "ROG STRIX X670E-E", "Rev 1.xx", "FAKE-SERIAL", "FAKE-TAG")...)
 	table = append(table, Structure(4, cpu, "FAKE-SERIAL")...)
 	table = append(table, Structure(4, empty)...)
