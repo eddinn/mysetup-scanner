@@ -47,7 +47,9 @@ done
 test -n "$url"
 origin=${url%%/t/*}
 grep -q "This is a development build, for tests only." "$work/page.txt"
-curl -s "$url" | grep -q "Open 127.0.0.1:${site##*:} in a new tab"
+# Saved first: grep -q ends at its first match, and curl writing into a closed pipe fails the check (exit 23, ci0, 2026-11-13).
+curl -s -o "$work/page.html" "$url"
+grep -q "Open 127.0.0.1:${site##*:} in a new tab" "$work/page.html"
 
 send() { # $1 the Origin, $2 the code; prints the answer's status
     curl -s -o "$work/answer" -w '%{http_code}' -X POST -H "Origin: $1" -H 'Content-Type: application/json' -d "{\"code\": \"$2\"}" "${url}send"
@@ -70,8 +72,8 @@ if [ "$(uname -s)" = Linux ] && [ -z "${1:-}" ]; then
     printf 'AAAA-AAAA\nK7QD-M2XP\n' |
         MYSETUP_SCAN_SITE=$site script -qec "'$app_file' --cli > '$work/cli-report.txt'" /dev/null | tr -d '\r' > "$work/cli.txt"
     grep -q '^This code is wrong, was already used or has expired.' "$work/cli.txt"
-    grep -A1 '^Sent. Open this address in your web browser to review it:$' "$work/cli.txt" |
-        grep -qx "  $site/setups/01M7/components/scan/01M8"
+    grep -A1 '^Sent. Open this address in your web browser to review it:$' "$work/cli.txt" > "$work/sent.txt"
+    grep -qx "  $site/setups/01M7/components/scan/01M8" "$work/sent.txt"
     cmp "$work/cli-report.txt" "$work/report.txt"
     cmp "$work/received" "$work/report.txt"
     printf '%s\n' AAAA-AAAA K7QD-M2XP | cmp - "$work/codes"
