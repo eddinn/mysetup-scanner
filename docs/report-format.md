@@ -5,13 +5,15 @@ it is plain text a person can read before sending. `tests/validate_report.py` ch
 
 ```
 mysetup-report 1
-source=script-sh/0.1.0
+source=script-sh/0.2.0
 tested=yes
 os.family=linux
 os.name=debian
 os.version=13
 os.architecture=x86-64
 environment=physical
+system.vendor=ASUS
+system.chassis=desktop
 cpu.vendor=AMD
 cpu.model=AMD Ryzen 7 7800X3D 8-Core Processor
 cpu.cores=8
@@ -69,6 +71,8 @@ The values above are made up.
 | `os.version` | Such as `13`; a word |
 | `os.architecture` | `x86-64`, `arm64`, `x86`, `arm`, `riscv64`, `ppc64le`, `ppc64`, `s390x` or `other` |
 | `environment` | `physical`, `virtual_machine`, `container`, `wsl` or `unknown`, as `scanner_reports.environment_type` |
+| `system.vendor`, `system.model`, `system.family`, `system.version`, `system.sku` | Text: the computer's own maker and model as its firmware names them (SMBIOS type 1; Linux's `sys_vendor`, `product_name`, `product_family`, `product_version` and `product_sku`), such as a laptop's or a prebuilt's model. Its serial number and UUID are never read. A built computer's firmware usually leaves them at a placeholder ("System Product Name"), which is left out. Since 0.2.0 (the operator, 2026-11-13: "we need to match models") |
+| `system.chassis` | A word: the chassis type as SMBIOS names it (DSP0134 7.4.1), such as `desktop`, `tower`, `mini-pc`, `laptop`, `notebook`, `convertible`, `all-in-one` or `rack-mount-chassis`; left out when it says other or unknown. Since 0.2.0 |
 | `cpu.vendor`, `cpu.model` | Text |
 | `cpu.cores`, `cpu.threads` | Whole number |
 | `gpu.N.pci` | PCI vendor and device, four lower-case hex digits each: `10de:2204` |
@@ -98,8 +102,9 @@ The values above are made up.
 
 ## What it never carries
 
-Usernames, hostnames, IP or MAC addresses, motherboard or system UUIDs, machine GUIDs, Windows SIDs, product keys, disk
-serial numbers, file paths, file names, network names, browser identifiers or other software (ADR-005).
+Usernames, hostnames, IP or MAC addresses, motherboard or system UUIDs, machine GUIDs, Windows SIDs, product keys, serial
+numbers of the computer, its chassis or any part, asset tags, file paths, file names, network names, browser identifiers or
+other software (ADR-005).
 
 The scripts and the app read their sources by exact key, and print only through one function that names every field. As a second
 boundary, that function drops a value shaped like a MAC or IP address, a UUID, an email address or a home directory. The

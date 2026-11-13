@@ -23,7 +23,7 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'SilentlyContinue'
 
-$Version = '0.1.0'
+$Version = '0.2.0'
 $MaxItems = 64
 $script:Notes = New-Object System.Collections.ArrayList
 
@@ -44,8 +44,20 @@ $Placeholders = @(
     'not available', 'n/a', 'na', 'none', 'null', 'unknown', 'undefined', 'empty', '[empty]', 'o.e.m.', 'oem',
     'system manufacturer', 'system product name', 'system version', 'baseboard product name',
     'base board product name', 'no dimm', 'nodimm', 'not installed', 'no module installed', 'dimm', 'module',
-    'part number', 'serial number', '1234567890', '123456789012'
+    'part number', 'serial number', '1234567890', '123456789012',
+    # What firmware writes in a computer's own fields when its maker filled in nothing (system.*).
+    'system sku', 'sku', 'system family', 'family', 'type1productconfigid', 'type1family', 'default', 'invalid', 'x.x'
 )
+
+# SMBIOS's chassis types (DSP0134 7.4.1) as the report names them; Other (1) and Unknown (2) give nothing.
+$ChassisNames = @{
+    3 = 'desktop'; 4 = 'low-profile-desktop'; 5 = 'pizza-box'; 6 = 'mini-tower'; 7 = 'tower'; 8 = 'portable'; 9 = 'laptop'
+    10 = 'notebook'; 11 = 'hand-held'; 12 = 'docking-station'; 13 = 'all-in-one'; 14 = 'sub-notebook'; 15 = 'space-saving'
+    16 = 'lunch-box'; 17 = 'main-server-chassis'; 18 = 'expansion-chassis'; 19 = 'sub-chassis'; 20 = 'bus-expansion-chassis'
+    21 = 'peripheral-chassis'; 22 = 'raid-chassis'; 23 = 'rack-mount-chassis'; 24 = 'sealed-case-pc'; 25 = 'multi-system-chassis'
+    26 = 'compact-pci'; 27 = 'advanced-tca'; 28 = 'blade'; 29 = 'blade-enclosure'; 30 = 'tablet'; 31 = 'convertible'
+    32 = 'detachable'; 33 = 'iot-gateway'; 34 = 'embedded-pc'; 35 = 'mini-pc'; 36 = 'stick-pc'
+}
 
 # Printable ASCII, single spaces, at most 120 characters. Nothing for a placeholder, or for anything
 # shaped like an address, an ID or a home directory: a hardware name never looks like those.
@@ -68,7 +80,7 @@ function Get-CleanText([object]$Value) {
 # The only way anything reaches the report. A field not named here stops the script.
 function Write-Field([string]$Name, [object]$Value) {
     $text = ''
-    if ($Name -cmatch '^(cpu\.(vendor|model)|motherboard\.(vendor|model)|gpu\.[0-9]+\.(vendor|model)|memory\.[0-9]+\.(maker|part)|storage\.[0-9]+\.model)$') {
+    if ($Name -cmatch '^(system\.(vendor|model|family|version|sku)|cpu\.(vendor|model)|motherboard\.(vendor|model)|gpu\.[0-9]+\.(vendor|model)|memory\.[0-9]+\.(maker|part)|storage\.[0-9]+\.model)$') {
         $text = Get-CleanText $Value
     }
     elseif ($Name -cmatch '^(cpu\.(cores|threads)|memory\.total_mb|memory\.[0-9]+\.(size_mb|speed_mts|configured_speed_mts)|storage\.[0-9]+\.size_bytes)$') {
@@ -79,7 +91,7 @@ function Write-Field([string]$Name, [object]$Value) {
         $text = [string]$Value
         if ($text -cnotmatch '^[0-9a-f]{4}:[0-9a-f]{4}$') { return }
     }
-    elseif ($Name -cmatch '^(source|tested|os\.(family|name|version|architecture)|environment|memory\.[0-9]+\.(type|form)|storage\.[0-9]+\.(interface|media)|capability\.[a-z_]+(\.reason)?)$') {
+    elseif ($Name -cmatch '^(source|tested|os\.(family|name|version|architecture)|environment|system\.chassis|memory\.[0-9]+\.(type|form)|storage\.[0-9]+\.(interface|media)|capability\.[a-z_]+(\.reason)?)$') {
         $text = [string]$Value
         if ($text -cnotmatch '^[A-Za-z0-9._+/-]+$') { return }
     }
@@ -182,6 +194,26 @@ $System = @(Get-Part 'Win32_OperatingSystem' @('Version'))
 if ($System.Count -gt 0) { Write-Field 'os.version' $System[0].Version }
 Write-Field 'os.architecture' $Architecture
 Write-Field 'environment' $Environment
+
+# The computer's own model, as its maker names it (the operator, 2026-11-13: "we need to match models"), only on a physical
+# computer: a virtual machine's can be set to anything, its host's name among them. Only the properties named are asked for:
+# never IdentifyingNumber (the serial number), UUID, SerialNumber or SMBIOSAssetTag.
+if ($Environment -eq 'physical') {
+    $Computer = @(Get-Part 'Win32_ComputerSystem' @('Manufacturer', 'Model', 'SystemFamily', 'SystemSKUNumber'))
+    $Product = @(Get-Part 'Win32_ComputerSystemProduct' @('Version'))
+    $Enclosure = @(Get-Part 'Win32_SystemEnclosure' @('ChassisTypes'))
+    if ($Computer.Count -gt 0) {
+        Write-Field 'system.vendor' $Computer[0].Manufacturer
+        Write-Field 'system.model' $Computer[0].Model
+        Write-Field 'system.family' $Computer[0].SystemFamily
+    }
+    if ($Product.Count -gt 0) { Write-Field 'system.version' $Product[0].Version }
+    if ($Computer.Count -gt 0) { Write-Field 'system.sku' $Computer[0].SystemSKUNumber }
+    if ($Enclosure.Count -gt 0 -and @($Enclosure[0].ChassisTypes).Count -gt 0) {
+        $Chassis = [int](@($Enclosure[0].ChassisTypes)[0]) -band 0x7F
+        if ($ChassisNames.ContainsKey($Chassis)) { Write-Field 'system.chassis' $ChassisNames[$Chassis] }
+    }
+}
 
 # CPU. Counts add up across sockets.
 $Processors = @(Get-Part 'Win32_Processor' @('Manufacturer', 'Name', 'NumberOfCores', 'NumberOfLogicalProcessors'))

@@ -96,6 +96,8 @@ func ReadWindows(src WindowsSource) Hardware {
 		h.GPUs = append(h.GPUs, g)
 	}
 
+	h.System = System{Vendor: table.SystemMaker, Model: table.SystemModel, Family: table.SystemFamily, Version: table.SystemVersion,
+		SKU: table.SystemSKU, Chassis: table.Chassis}
 	h.Board = Board{Vendor: table.BoardMaker, Model: table.BoardModel}
 	h.Memory.TotalMB = src.TotalMemory / 1048576
 	h.Memory.Modules = modulesFrom(table)

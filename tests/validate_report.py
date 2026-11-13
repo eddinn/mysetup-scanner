@@ -20,6 +20,8 @@ FIELDS: list[tuple[str, str]] = [
     (r"os\.version", WORD),
     (r"os\.architecture", r"x86-64|arm64|x86|arm|riscv64|ppc64le|ppc64|s390x|other"),
     (r"environment", r"physical|virtual_machine|container|wsl|unknown"),
+    (r"system\.(vendor|model|family|version|sku)", TEXT),
+    (r"system\.chassis", WORD),
     (r"cpu\.(vendor|model)", TEXT),
     (r"cpu\.(cores|threads)", WHOLE),
     (r"gpu\.[0-9]+\.(pci|subsystem)", PCI),

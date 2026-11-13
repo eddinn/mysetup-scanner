@@ -79,6 +79,8 @@ func ReadMacOS(src UnixSource) Hardware {
 	flush()
 
 	if model := src.Sysctl("hw.model"); model != "" {
+		// A Mac is its model ("MacBookPro18,3"); the site does not list the board apart when it is the same.
+		h.System = System{Vendor: "Apple", Model: model}
 		h.Board = Board{Vendor: "Apple", Model: model}
 	}
 	h.Memory.TotalMB = bytesToMB(src.Sysctl("hw.memsize"))
@@ -178,8 +180,11 @@ func ReadFreeBSD(src UnixSource) Hardware {
 		}
 	}
 
-	h.Board = Board{Vendor: strings.TrimSpace(string(src.Run("kenv", "-q", "smbios.planar.maker"))),
-		Model: strings.TrimSpace(string(src.Run("kenv", "-q", "smbios.planar.product")))}
+	kenv := func(name string) string { return strings.TrimSpace(string(src.Run("kenv", "-q", name))) }
+	// By name: smbios.system.serial and smbios.system.uuid are never read. FreeBSD hands over no chassis type.
+	h.System = System{Vendor: kenv("smbios.system.maker"), Model: kenv("smbios.system.product"), Family: kenv("smbios.system.family"),
+		Version: kenv("smbios.system.version"), SKU: kenv("smbios.system.sku")}
+	h.Board = Board{Vendor: kenv("smbios.planar.maker"), Model: kenv("smbios.planar.product")}
 	h.Memory.TotalMB = bytesToMB(src.Sysctl("hw.physmem"))
 	firmwareModules(src, &h)
 
@@ -227,14 +232,15 @@ func ReadFreeBSD(src UnixSource) Hardware {
 	return h
 }
 
-// ReadSysctlBasics reads what OpenBSD and NetBSD give through sysctl: the processor, its thread count, the memory and the board.
-// Not yet tested on a real machine.
-func ReadSysctlBasics(src UnixSource, family, model, threads, memory, boardVendor, boardModel string) Hardware {
+// ReadSysctlBasics reads what OpenBSD and NetBSD give through sysctl: the processor, its thread count, the memory, the computer's
+// model and the board. Not yet tested on a real machine.
+func ReadSysctlBasics(src UnixSource, family, model, threads, memory, systemVendor, systemModel, boardVendor, boardModel string) Hardware {
 	h := Hardware{Family: family, OSName: family, OSVersion: src.Sysctl("kern.osrelease"), Architecture: NormalArchitecture(src.Machine),
 		Environment: "unknown"}
 	h.CPU.Model = src.Sysctl(model)
 	h.CPU.Threads, _ = strconv.Atoi(src.Sysctl(threads))
 	h.Memory.TotalMB = bytesToMB(src.Sysctl(memory))
+	h.System = System{Vendor: src.Sysctl(systemVendor), Model: src.Sysctl(systemModel)}
 	h.Board = Board{Vendor: src.Sysctl(boardVendor), Model: src.Sysctl(boardModel)}
 	firmwareModules(src, &h)
 
@@ -252,6 +258,15 @@ func ReadIllumos(src UnixSource) Hardware {
 		h.CPU.Threads = len(strings.Split(out, "\n"))
 	}
 	h.Memory.TotalMB, _ = strconv.ParseInt(strings.TrimSpace(string(src.Run("prtconf", "-m"))), 10, 64)
+	system := src.Run("smbios", "-t", "SMB_TYPE_SYSTEM")
+	h.System = System{Vendor: keyValue(system, ":", "Manufacturer"), Model: keyValue(system, ":", "Product"), Family: keyValue(system, ":", "Family"),
+		Version: keyValue(system, ":", "Version"), SKU: keyValue(system, ":", "SKU Number")}
+	// "Chassis Type: 0xa (notebook)"; the chassis's serial number and asset tag are not read.
+	if m := regexp.MustCompile(`^0x([0-9a-f]{1,2})\b`).FindStringSubmatch(keyValue(src.Run("smbios", "-t", "SMB_TYPE_CHASSIS"), ":", "Chassis Type")); m != nil {
+		if kind, err := strconv.ParseUint(m[1], 16, 8); err == nil {
+			h.System.Chassis = smbios.ChassisName(byte(kind))
+		}
+	}
 	board := src.Run("smbios", "-t", "SMB_TYPE_BASEBOARD")
 	h.Board = Board{Vendor: keyValue(board, ":", "Manufacturer"), Model: keyValue(board, ":", "Product")}
 	firmwareModules(src, &h)

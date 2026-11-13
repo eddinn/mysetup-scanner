@@ -124,6 +124,14 @@ written through one function that names every field ([internal/report](../intern
 In a virtual machine or a container the report says so, and the app tells the member to run it on the host to include the real
 hardware. Inside WSL it declines and sends the member to the Windows app.
 
+Since 0.2.0 the report names the computer's own model, as its maker's firmware does (`system.vendor`, `model`, `family`,
+`version`, `sku` and `chassis`, [report-format.md](report-format.md)): a laptop's or a prebuilt's model, so MySetup can match the
+computer itself (the operator, 2026-11-13: "we need to match models ... we just don't ship secret or private information"). Its
+serial number, UUID and asset tag are never read. They are written only on a physical computer: a virtual machine's can be set
+to anything, its host's name among them, and where the environment is unknown (the BSDs other than FreeBSD, illumos) they
+are left out too. A built computer's firmware usually says "System Product Name" and the like, which is dropped. The scripts,
+also 0.2.0, write the same fields the same way.
+
 ## Tested
 
 A system is marked tested once a real machine of it has passed (`tested=yes`). On 2026-11-07 the app's reports were identical to the

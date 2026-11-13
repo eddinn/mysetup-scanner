@@ -36,6 +36,9 @@ type Hardware struct {
 	// Tested is true once a real machine of this system and architecture has passed with the app.
 	Tested bool
 
+	// System is the computer itself, as its maker names it: a laptop's or a prebuilt's model. A built computer's firmware
+	// usually leaves it at a placeholder, which the report drops.
+	System System
 	CPU    CPU
 	GPUs   []GPU
 	Board  Board
@@ -56,6 +59,12 @@ type CPU struct {
 
 type GPU struct {
 	PCI, Subsystem, Vendor, Model string
+}
+
+// System names the computer's model, never the one computer: no serial number, UUID or asset tag. Chassis is DSP0134's chassis
+// type as smbios.ChassisName writes it, such as "notebook".
+type System struct {
+	Vendor, Model, Family, Version, SKU, Chassis string
 }
 
 type Board struct {
@@ -101,6 +110,18 @@ func (h *Hardware) Report() *report.Report {
 	r.Set("os.version", h.OSVersion)
 	r.Set("os.architecture", h.Architecture)
 	r.Set("environment", h.Environment)
+
+	// The computer's model, as its maker names it (the operator, 2026-11-13: "we need to match models"), only on a physical
+	// computer, whose firmware its maker wrote: a virtual machine's can be set to anything, its host's name among them, so it is
+	// never written there, nor where the environment is unknown. A placeholder is dropped.
+	if h.Environment == "physical" {
+		r.Set("system.vendor", report.CleanText(h.System.Vendor))
+		r.Set("system.model", report.CleanText(h.System.Model))
+		r.Set("system.family", report.CleanText(h.System.Family))
+		r.Set("system.version", report.CleanText(h.System.Version))
+		r.Set("system.sku", report.CleanText(h.System.SKU))
+		r.Set("system.chassis", h.System.Chassis)
+	}
 
 	cpu := "no-source"
 	r.Set("cpu.vendor", NormalCPUVendor(h.CPU.Vendor))

@@ -18,7 +18,7 @@
 
 set -u
 
-VERSION=0.1.0
+VERSION=0.2.0
 MAX_ITEMS=64
 WITH_ROOT=no
 NOTES=''
@@ -79,7 +79,8 @@ clean_text() {
                 "not specified|not available|n/a|na|none|null|unknown|undefined|empty|[empty]|o.e.m.|oem|" \
                 "system manufacturer|system product name|system version|baseboard product name|" \
                 "base board product name|no dimm|nodimm|not installed|no module installed|dimm|module|" \
-                "part number|serial number|1234567890|123456789012", words, "|")
+                "part number|serial number|1234567890|123456789012|" \
+                "system sku|sku|system family|family|type1productconfigid|type1family|default|invalid|x.x", words, "|")
             for (i = 1; i <= count; i++) placeholder[words[i]] = 1
             hh = "[0-9a-f][0-9a-f]"
             mac = hh "[:-]" hh "[:-]" hh "[:-]" hh "[:-]" hh "[:-]" hh
@@ -104,7 +105,8 @@ clean_text() {
 # The only way anything reaches the report. A field not named here stops the script.
 emit() {
     case $1 in
-        cpu.vendor | cpu.model | motherboard.vendor | motherboard.model | gpu.*.vendor | gpu.*.model | \
+        system.vendor | system.model | system.family | system.version | system.sku | \
+            cpu.vendor | cpu.model | motherboard.vendor | motherboard.model | gpu.*.vendor | gpu.*.model | \
             memory.*.maker | memory.*.part | storage.*.model)
             _value=$(clean_text "$2")
             ;;
@@ -120,7 +122,7 @@ emit() {
                 *) return 0 ;;
             esac
             ;;
-        source | tested | os.family | os.name | os.version | os.architecture | environment | \
+        source | tested | os.family | os.name | os.version | os.architecture | environment | system.chassis | \
             memory.*.type | memory.*.form | storage.*.interface | storage.*.media | capability.*)
             _value=$2
             case $_value in '' | *[!A-Za-z0-9._+/-]*) return 0 ;; esac
@@ -456,6 +458,33 @@ read_gpu_linux() {
     done
 
     if [ "$_n" -gt 0 ]; then CAP_GPU=available; fi
+}
+
+# A chassis type's number as SMBIOS names it (DSP0134 7.4.1); "Other" and "Unknown" give nothing. The top bit is a lock.
+chassis_name() {
+    case $1 in '' | *[!0-9]*) return 0 ;; esac
+    case $(($1 % 128)) in
+        3) echo desktop ;; 4) echo low-profile-desktop ;; 5) echo pizza-box ;; 6) echo mini-tower ;; 7) echo tower ;;
+        8) echo portable ;; 9) echo laptop ;; 10) echo notebook ;; 11) echo hand-held ;; 12) echo docking-station ;;
+        13) echo all-in-one ;; 14) echo sub-notebook ;; 15) echo space-saving ;; 16) echo lunch-box ;;
+        17) echo main-server-chassis ;; 18) echo expansion-chassis ;; 19) echo sub-chassis ;; 20) echo bus-expansion-chassis ;;
+        21) echo peripheral-chassis ;; 22) echo raid-chassis ;; 23) echo rack-mount-chassis ;; 24) echo sealed-case-pc ;;
+        25) echo multi-system-chassis ;; 26) echo compact-pci ;; 27) echo advanced-tca ;; 28) echo blade ;; 29) echo blade-enclosure ;;
+        30) echo tablet ;; 31) echo convertible ;; 32) echo detachable ;; 33) echo iot-gateway ;; 34) echo embedded-pc ;;
+        35) echo mini-pc ;; 36) echo stick-pc ;;
+    esac
+}
+
+# The computer's own model, as its maker names it, by file name: product_serial, product_uuid, chassis_serial and
+# chassis_asset_tag beside them are never read (the operator, 2026-11-13: "we need to match models").
+read_system_linux() {
+    _dmi=$ROOT/sys/class/dmi/id
+    emit system.vendor "$(first_line "$_dmi/sys_vendor")"
+    emit system.model "$(first_line "$_dmi/product_name")"
+    emit system.family "$(first_line "$_dmi/product_family")"
+    emit system.version "$(first_line "$_dmi/product_version")"
+    emit system.sku "$(first_line "$_dmi/product_sku")"
+    emit system.chassis "$(chassis_name "$(first_line "$_dmi/chassis_type")")"
 }
 
 read_motherboard_linux() {
@@ -866,6 +895,42 @@ environment_freebsd() {
 # is reported as such rather than guessed.
 # ---------------------------------------------------------------------------------------------
 
+# A Mac is its model ("MacBookPro18,3"), which the board line also names.
+read_system_macos() {
+    _hw=$(sysctl -n hw.model 2>/dev/null)
+    if [ -n "$_hw" ]; then
+        emit system.vendor Apple
+        emit system.model "$_hw"
+    fi
+}
+
+# By name: smbios.system.serial and smbios.system.uuid are never read. FreeBSD hands over no chassis type.
+read_system_freebsd() {
+    emit system.vendor "$(kenv -q smbios.system.maker 2>/dev/null)"
+    emit system.model "$(kenv -q smbios.system.product 2>/dev/null)"
+    emit system.family "$(kenv -q smbios.system.family 2>/dev/null)"
+    emit system.version "$(kenv -q smbios.system.version 2>/dev/null)"
+    emit system.sku "$(kenv -q smbios.system.sku 2>/dev/null)"
+}
+
+# $1 the computer's maker, $2 its model: sysctl names.
+read_system_sysctl() {
+    emit system.vendor "$(sysctl -n "$1" 2>/dev/null)"
+    emit system.model "$(sysctl -n "$2" 2>/dev/null)"
+}
+
+# By exact key; "Serial Number", "UUID" and the chassis's "Asset Tag" are not kept. "Chassis Type: 0xa (notebook)".
+read_system_illumos() {
+    _system=$(smbios -t SMB_TYPE_SYSTEM 2>/dev/null)
+    emit system.vendor "$(printf '%s\n' "$_system" | field ':' Manufacturer)"
+    emit system.model "$(printf '%s\n' "$_system" | field ':' Product)"
+    emit system.family "$(printf '%s\n' "$_system" | field ':' Family)"
+    emit system.version "$(printf '%s\n' "$_system" | field ':' Version)"
+    emit system.sku "$(printf '%s\n' "$_system" | field ':' 'SKU Number')"
+    _type=$(smbios -t SMB_TYPE_CHASSIS 2>/dev/null | field ':' 'Chassis Type' | awk '{ print $1 }')
+    case $_type in 0x[0-9a-fA-F]*) emit system.chassis "$(chassis_name "$((_type))")" ;; esac
+}
+
 read_sysctl_basics() {
     # $1 CPU model, $2 thread count, $3 memory bytes, $4 board vendor, $5 board model: sysctl names.
     _model=$(sysctl -n "$1" 2>/dev/null)
@@ -1038,6 +1103,19 @@ main() {
     esac
     emit os.architecture "$_architecture"
     emit environment "$environment"
+
+    # The computer's model only on a physical computer, whose firmware its maker wrote. A virtual machine's can be set to
+    # anything, its host's name among them, so it is never read there; nor where the script cannot tell (unknown).
+    if [ "$environment" = physical ]; then
+        case $family in
+            linux) read_system_linux ;;
+            macos) read_system_macos ;;
+            freebsd) read_system_freebsd ;;
+            openbsd) read_system_sysctl hw.vendor hw.product ;;
+            netbsd) read_system_sysctl machdep.dmi.system-vendor machdep.dmi.system-product ;;
+            illumos) read_system_illumos ;;
+        esac
+    fi
 
     case $family in
         linux) read_linux ;;

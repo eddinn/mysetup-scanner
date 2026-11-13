@@ -25,7 +25,10 @@ function New-Fake([hashtable]$Values) { return [pscustomobject]$Values }
 
 $global:Computer = @{
     Win32_ComputerSystem  = @(New-Fake @{ Manufacturer = 'ASUS'; Model = 'System Product Name'; TotalPhysicalMemory = [uint64]34359738368
+            SystemFamily = 'To be filled by O.E.M.'; SystemSKUNumber = 'SKU'
             Name = 'FAKE-HOST'; UserName = 'FAKE-USER'; Domain = 'FAKE-DOMAIN'; HypervisorPresent = $true })
+    Win32_ComputerSystemProduct = @(New-Fake @{ Version = 'System Version'; IdentifyingNumber = 'FAKE-SERIAL'; UUID = '12345678-1234-1234-1234-123456789abc' })
+    Win32_SystemEnclosure = @(New-Fake @{ ChassisTypes = [uint16[]]@(3); SerialNumber = 'FAKE-SERIAL'; SMBIOSAssetTag = 'FAKE-TAG' })
     Win32_OperatingSystem = @(New-Fake @{ Version = '10.0.26100'; CSName = 'FAKE-HOST'; RegisteredUser = 'FAKE-USER'; SerialNumber = 'FAKE-PRODUCT-ID'
             Caption = 'Microsoft Windows 11 Pro' })
     Win32_Processor       = @(New-Fake @{ Manufacturer = 'GenuineIntel'; Name = 'Intel(R) Core(TM) i7-14700K CPU @ 3.40GHz'; NumberOfCores = 20
@@ -81,13 +84,15 @@ $Text = Get-ReportText $Original
 
 $Expected = @'
 mysetup-report 1
-source=script-ps1/0.1.0
+source=script-ps1/0.2.0
 tested=yes
 os.family=windows
 os.name=windows
 os.version=10.0.26100
 os.architecture=x86-64
 environment=physical
+system.vendor=ASUS
+system.chassis=desktop
 cpu.vendor=Intel
 cpu.model=Intel(R) Core(TM) i7-14700K CPU @ 3.40GHz
 cpu.cores=20
@@ -140,7 +145,8 @@ foreach ($Value in $Planted) {
     Assert-That (-not $Text.Contains($Value)) "the report does not carry $Value"
 }
 
-$Banned = 'SerialNumber', 'Name$', 'UserName', 'Domain', 'CSName', 'RegisteredUser', 'UniqueId', 'ObjectId', 'Tag', 'DeviceLocator', 'BankLabel', 'ProcessorId', 'SystemName', 'Caption'
+$Banned = 'SerialNumber', 'Name$', 'UserName', 'Domain', 'CSName', 'RegisteredUser', 'UniqueId', 'ObjectId', 'Tag', 'DeviceLocator', 'BankLabel', 'ProcessorId', 'SystemName', 'Caption',
+    'IdentifyingNumber', 'UUID', 'SMBIOSAssetTag'
 $AskedFor = @($global:Asked | ForEach-Object { $_.Property } | Where-Object { $_ -ne 'Name' -and $_ -ne 'FriendlyName' })
 foreach ($Name in $Banned) {
     Assert-That (-not ($AskedFor | Where-Object { $_ -match "^$Name" })) "no query asks for $Name"
@@ -152,7 +158,25 @@ $Saved = $global:Computer.Win32_ComputerSystem
 $global:Computer.Win32_ComputerSystem = @(New-Fake @{ Manufacturer = 'Microsoft Corporation'; Model = 'Virtual Machine'; TotalPhysicalMemory = [uint64]8589934592 })
 $Lines = Invoke-Scan -Environment @{ PROCESSOR_ARCHITECTURE = 'AMD64'; PROCESSOR_ARCHITEW6432 = $null }
 Assert-That ($Lines -contains 'environment=virtual_machine') 'a virtual machine is reported as one'
+# Its model fields can be set to anything, its host's name among them: never written.
+Assert-That (-not ($Lines | Where-Object { $_ -like 'system.*' })) 'a virtual machine''s model is never written'
 $global:Computer.Win32_ComputerSystem = $Saved
+
+# A laptop names its model (the operator, 2026-11-13: "we need to match models"), never its serial number.
+$SavedEnclosure = $global:Computer.Win32_SystemEnclosure
+$SavedProduct = $global:Computer.Win32_ComputerSystemProduct
+$global:Computer.Win32_ComputerSystem = @(New-Fake @{ Manufacturer = 'Micro-Star International Co., Ltd.'; Model = 'GL65 Leopard 9SCSR'; SystemFamily = 'GL'
+        SystemSKUNumber = '16R3.1'; TotalPhysicalMemory = [uint64]17179869184; Name = 'FAKE-HOST' })
+$global:Computer.Win32_ComputerSystemProduct = @(New-Fake @{ Version = 'REV:1.0'; IdentifyingNumber = 'FAKE-SERIAL'; UUID = '12345678-1234-1234-1234-123456789abc' })
+$global:Computer.Win32_SystemEnclosure = @(New-Fake @{ ChassisTypes = [uint16[]]@(10); SerialNumber = 'FAKE-SERIAL'; SMBIOSAssetTag = 'FAKE-TAG' })
+$Lines = Invoke-Scan -Environment @{ PROCESSOR_ARCHITECTURE = 'AMD64'; PROCESSOR_ARCHITEW6432 = $null }
+$Laptop = 'system.vendor=Micro-Star International Co., Ltd.', 'system.model=GL65 Leopard 9SCSR', 'system.family=GL', 'system.version=REV:1.0',
+    'system.sku=16R3.1', 'system.chassis=notebook'
+Assert-That ((Compare-Object $Laptop @($Lines | Where-Object { $_ -like 'system.*' }) -SyncWindow 0) -eq $null) 'a laptop names its model, in the app''s order'
+Assert-That (-not (Get-ReportText $Lines).Contains('FAKE-')) 'and nothing planted'
+$global:Computer.Win32_ComputerSystem = $Saved
+$global:Computer.Win32_ComputerSystemProduct = $SavedProduct
+$global:Computer.Win32_SystemEnclosure = $SavedEnclosure
 
 # ARM64 has not passed on a real machine.
 $Lines = Invoke-Scan -Environment @{ PROCESSOR_ARCHITECTURE = 'ARM64'; PROCESSOR_ARCHITEW6432 = $null }

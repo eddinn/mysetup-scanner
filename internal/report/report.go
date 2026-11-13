@@ -22,12 +22,12 @@ type Report struct {
 }
 
 var (
-	textField = regexp.MustCompile(`^(cpu\.vendor|cpu\.model|motherboard\.vendor|motherboard\.model|gpu\.[0-9]+\.(vendor|model)|` +
+	textField = regexp.MustCompile(`^(system\.(vendor|model|family|version|sku)|cpu\.vendor|cpu\.model|motherboard\.vendor|motherboard\.model|gpu\.[0-9]+\.(vendor|model)|` +
 		`memory\.[0-9]+\.(maker|part)|storage\.[0-9]+\.model)$`)
 	numberField = regexp.MustCompile(`^(cpu\.cores|cpu\.threads|memory\.total_mb|memory\.[0-9]+\.(size_mb|speed_mts|configured_speed_mts)|` +
 		`storage\.[0-9]+\.size_bytes)$`)
 	pciField  = regexp.MustCompile(`^gpu\.[0-9]+\.(pci|subsystem)$`)
-	wordField = regexp.MustCompile(`^(source|tested|os\.family|os\.name|os\.version|os\.architecture|environment|` +
+	wordField = regexp.MustCompile(`^(source|tested|os\.family|os\.name|os\.version|os\.architecture|environment|system\.chassis|` +
 		`memory\.[0-9]+\.(type|form)|storage\.[0-9]+\.(interface|media)|capability\.[a-z_]+(\.reason)?)$`)
 	pciValue  = regexp.MustCompile(`^[0-9a-f]{4}:[0-9a-f]{4}$`)
 	wordValue = regexp.MustCompile(`^[A-Za-z0-9._+/-]+$`)
@@ -111,7 +111,9 @@ func init() {
 		"not specified|not available|n/a|na|none|null|unknown|undefined|empty|[empty]|o.e.m.|oem|"+
 		"system manufacturer|system product name|system version|baseboard product name|"+
 		"base board product name|no dimm|nodimm|not installed|no module installed|dimm|module|"+
-		"part number|serial number|1234567890|123456789012", "|") {
+		"part number|serial number|1234567890|123456789012|"+
+		// What firmware writes in a computer's own fields when its maker filled in nothing (system.*).
+		"system sku|sku|system family|family|type1productconfigid|type1family|default|invalid|x.x", "|") {
 		placeholders[word] = true
 	}
 }
