@@ -6,26 +6,28 @@ Tells [MySetup](https://mysetup.is) what hardware your computer has. MySetup off
 |---|---|---|---|
 | Needs | Nothing | Nothing installed | A download |
 | Detail | Least | Full | Full |
-| Best mark | Detected | Detected | Verified, once sending is built |
+| Best mark | Detected | Detected | Verified, when the app sends it |
 
 This repository holds the app and the script. Both read the same report of your computer's hardware: the processor, graphics,
 motherboard, memory and storage, by name only. You check it on your build page before anything is saved.
 
-- **The app** is the easiest: download it, double-click it, and your report opens on a page in your web browser with a Copy
-  button. Its release for Windows and Linux is
-  [app-v0.1.0](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.1.0).
-- **The script** is a text file you can read before you run it, for every system including macOS. Its release is
-  [v0.1.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.1.0).
+- **The app** is the easiest: download it, double-click it, and your report opens on a page in your web browser. Type a code from
+  your build page there and it sends the report to your build ([the last steps](#last-send-it-with-a-code)). Its release for
+  Windows and Linux is [app-v0.2.0](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.2.0).
+- **The script** is a text file you can read before you run it, for every system including macOS. It sends nothing: you copy its
+  report and paste it on your build page ([the last steps](#last-paste-it-on-your-build)). Its release is
+  [v0.2.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.2.0).
 
-Neither sends anything anywhere. You copy the report and paste it on your build page ([the last steps](#last-paste-it-on-your-build)).
-Sending it straight to your build with a code from your build page comes in a later version of the app.
+The app sends only when you type a code, only to mysetup.is, and only the report you see. Without a code you can copy and paste its
+report as with the script.
 
 Below, click a line to open its steps.
 
 ## The app, step by step
 
-One file with nothing to install. It only reads: it sends nothing, writes no files and installs nothing. Its page is served from
-your own computer only, and the app stops when you click Done, close the page, or after 15 minutes.
+One file with nothing to install. It reads your hardware, and sends the report to mysetup.is only when you type a code from your
+build page; it writes no files and installs nothing. Its page is served from your own computer only, and the app stops when you
+click Done, close the page, or after 15 minutes.
 
 There are two ways to start it. Pick one and follow its steps to the end:
 
@@ -35,9 +37,9 @@ There are two ways to start it. Pick one and follow its steps to the end:
 <details>
 <summary><b>Windows: download and double-click</b></summary>
 
-1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-windows-x86-64.exe).
+1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-x86-64.exe).
    On a Windows computer with an ARM processor (such as a Snapdragon laptop), download
-   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-windows-arm64.exe) instead.
+   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-arm64.exe) instead.
 2. If your browser says the file "isn't commonly downloaded", keep it:
    - in Edge, point at the warning, click the three dots `...`, click **Keep**, then **Show more**, then **Keep anyway**;
    - in Chrome, click **Keep**.
@@ -55,9 +57,9 @@ instead: Smart App Control blocks apps that are not code-signed yet.
 <details>
 <summary><b>Linux: download, extract and double-click</b></summary>
 
-1. Download the app: [mysetup-scan-linux-x86-64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-linux-x86-64.tar.gz).
+1. Download the app: [mysetup-scan-linux-x86-64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-linux-x86-64.tar.gz).
    On an ARM computer, such as a Raspberry Pi 4 or 5 with a 64-bit system, download
-   [mysetup-scan-linux-arm64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-linux-arm64.tar.gz) instead; its names below end in `arm64`.
+   [mysetup-scan-linux-arm64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-linux-arm64.tar.gz) instead; its names below end in `arm64`.
 2. Open your Downloads folder in your file manager (on Ubuntu, the **Files** app).
 3. Double-click **mysetup-scan-linux-x86-64.tar.gz**. Ubuntu's Files unpacks it into a new folder,
    **mysetup-scan-linux-x86-64**. If your file manager shows what is inside the file instead, right-click the file and click
@@ -75,8 +77,8 @@ message box.
 <details>
 <summary><b>Windows: in a terminal (<code>--cli</code>)</b></summary>
 
-1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-windows-x86-64.exe) (on ARM,
-   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-windows-arm64.exe), and use that name in step 4). If your browser warns
+1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-x86-64.exe) (on ARM,
+   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-arm64.exe), and use that name in step 4). If your browser warns
    about it, keep it as in step 2 of **Windows: download and double-click**.
 2. Open PowerShell: press the Windows key, type **PowerShell**, and press **Enter**. A window opens where you can type.
 3. Copy this line, paste it into PowerShell (a right-click in the window pastes), and press **Enter**. It takes PowerShell to your
@@ -94,7 +96,9 @@ message box.
 
    If a blue box says "Windows protected your PC", click **More info**, then **Run anyway**.
 5. The report is printed in the window, from the line `mysetup-report 1` down to `mysetup-report-end`, with the steps under it.
-   Select those lines with the mouse and press **Ctrl+C** to copy them. Go on with [the last steps](#last-paste-it-on-your-build).
+   The app then asks for a code: get one as in [the last steps](#last-send-it-with-a-code), type it and press **Enter**. To copy
+   and paste the report instead, press **Enter** without a code, select the report's lines with the mouse, press **Ctrl+C**, and go
+   on with [these steps](#last-paste-it-on-your-build).
 
 </details>
 
@@ -110,7 +114,7 @@ message box.
 
    ```sh
    cd "$(xdg-user-dir DOWNLOAD 2>/dev/null || echo ~/Downloads)"
-   curl -fLO https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.1.0/mysetup-scan-linux-x86-64.tar.gz
+   curl -fLO https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-linux-x86-64.tar.gz
    tar -xzf mysetup-scan-linux-x86-64.tar.gz
    ./mysetup-scan-linux-x86-64/mysetup-scan --cli
    ```
@@ -118,8 +122,9 @@ message box.
    On an ARM computer, write `arm64` instead of `x86-64` in the last three lines. If you already downloaded the file with your
    browser, skip the `curl` line.
 3. The report is printed in the terminal, from the line `mysetup-report 1` down to `mysetup-report-end`, with the steps under it.
-   Select those lines with the mouse and press **Ctrl+Shift+C** to copy them. Go on with
-   [the last steps](#last-paste-it-on-your-build).
+   The app then asks for a code: get one as in [the last steps](#last-send-it-with-a-code), type it and press **Enter**. To copy
+   and paste the report instead, press **Enter** without a code, select the report's lines with the mouse, press **Ctrl+Shift+C**,
+   and go on with [these steps](#last-paste-it-on-your-build). Over SSH the report goes from the server straight to your build.
 
 Started with `sudo` (`sudo ./mysetup-scan-linux-x86-64/mysetup-scan --cli`), it also reads memory modules on systems without udev.
 
@@ -158,12 +163,12 @@ its page is hardened, and what has been tested are in [docs/app.md](docs/app.md)
 A text file that prints the report. Please read it before you run it; it is meant to be read. It only reads: it uses no network,
 writes no files, installs nothing and does not ask for root unless you say so. There is deliberately no pipe-to-shell one-liner,
 since that would skip the reading. Your build page on MySetup serves the same files as the
-[release](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.1.0).
+[release](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.2.0).
 
 <details>
 <summary><b>Windows, in PowerShell</b></summary>
 
-1. Download [mysetup-scan.ps1](https://github.com/eddinn/mysetup-scanner/releases/download/v0.1.0/mysetup-scan.ps1).
+1. Download [mysetup-scan.ps1](https://github.com/eddinn/mysetup-scanner/releases/download/v0.2.0/mysetup-scan.ps1).
 2. Open PowerShell: press the Windows key, type **PowerShell**, and press **Enter**. A window opens where you can type.
 3. Copy this line, paste it into PowerShell (a right-click in the window pastes), and press **Enter**. It takes PowerShell to
    your Downloads folder, wherever Windows keeps it:
@@ -187,7 +192,7 @@ since that would skip the reading. Your build page on MySetup serves the same fi
 <details>
 <summary><b>Mac, in Terminal</b></summary>
 
-1. Download [mysetup-scan.sh](https://github.com/eddinn/mysetup-scanner/releases/download/v0.1.0/mysetup-scan.sh).
+1. Download [mysetup-scan.sh](https://github.com/eddinn/mysetup-scanner/releases/download/v0.2.0/mysetup-scan.sh).
 2. Open Terminal: press **Cmd** and the **space bar** together, type **Terminal**, and press **Return**.
 3. Copy this line, paste it into Terminal with **Cmd+V**, and press **Return**. It takes Terminal to your Downloads folder:
 
@@ -209,7 +214,7 @@ since that would skip the reading. Your build page on MySetup serves the same fi
 <details>
 <summary><b>Linux and other Unix-like systems</b></summary>
 
-1. Download [mysetup-scan.sh](https://github.com/eddinn/mysetup-scanner/releases/download/v0.1.0/mysetup-scan.sh).
+1. Download [mysetup-scan.sh](https://github.com/eddinn/mysetup-scanner/releases/download/v0.2.0/mysetup-scan.sh).
 2. Open a terminal: press **Ctrl**, **Alt** and **T** together, or search your applications for **Terminal**.
 3. Copy each line, paste it into the terminal with **Ctrl+Shift+V**, and press **Enter**. The first goes to your Downloads folder;
    the second runs the script and puts its report in a file there; the third opens that file in your text editor:
@@ -253,6 +258,19 @@ gh attestation verify mysetup-scan.sh --repo eddinn/mysetup-scanner
 MySetup's build page shows each file's SHA-256 too. The scripts are not code-signed yet. The report format is in
 [docs/report-format.md](docs/report-format.md).
 
+## Last: send it with a code
+
+The app, on its page or in the terminal:
+
+1. In your web browser, go to [mysetup.is/setups](https://mysetup.is/setups) and sign in if it asks.
+2. Click your build. No build yet? Click **Create setup** first.
+3. Scroll down to **Hardware** and find **Scan this computer**. Open **With the MySetup app** and click **Get a code**. The code
+   works once, for 10 minutes.
+4. Type the code into the app: on its page in the box under **Send it to your build**, then click **Send to my build**; in the
+   terminal where it asks, then press **Enter**. It sends the report you see to mysetup.is, and nothing else.
+5. Open the review: on the page, click **Open the review**; in the terminal, open the address it prints. Check each part, then
+   click **Add these parts**. Nothing changes in your build until you do.
+
 ## Last: paste it on your build
 
 1. Go to [mysetup.is/setups](https://mysetup.is/setups) in your web browser and sign in if it asks.
@@ -288,8 +306,9 @@ reports what it was given and says so.
 
 ## What it never reads or sends
 
-Usernames, hostnames, IP or MAC addresses, motherboard or system UUIDs, machine GUIDs, Windows SIDs, product keys, disk serial
-numbers, file paths, file names, network names or other software.
+Usernames, hostnames, IP or MAC addresses, motherboard or system UUIDs, machine GUIDs, Windows SIDs, product keys, serial numbers of
+the computer, its chassis or any part, asset tags, file paths, file names, network names or other software. The app sends nothing
+but the report, and only with a code you type.
 
 Some sources hold such things beside what the report wants. So sources are read by exact key, and only the fields named in one
 function can be printed. The tests build made-up computers whose sources are full of planted serial numbers, hostnames and

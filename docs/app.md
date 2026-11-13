@@ -4,10 +4,10 @@ A Go program that reads the same report as the scripts ([report-format.md](repor
 shows it on a page in your own browser, or in the terminal with `--cli`. The design and the operator's decisions are in MySetup's
 `docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is reading and the two front ends.
 Stage 2 is sending: the site's codes, upload route and checks are MySetup's, and the app sends its report with a code from the
-build page ([Sending](#sending)), on the page and in the terminal, since 0.2.0 (not released yet: the operator's steps 4 and 5,
-a test on staging and his approval, come first). Code signing comes after stage 2. The current release is `app-v0.1.0`, the first
-stable one (2026-11-12), which cannot send. The member's steps, for each system and both ways of starting it (double-click, or a
-terminal with `--cli`), are in the [README](../README.md); they describe the current release.
+build page ([Sending](#sending)), on the page and in the terminal, since 0.2.0 (released 2026-11-13, after the operator's test
+on staging and his go). Code signing comes after stage 2. The current release is `app-v0.2.0`; `app-v0.1.0` (2026-11-12) could
+not send. The member's steps, for each system and both ways of starting it (double-click, or a terminal with `--cli`), are in the
+[README](../README.md); they describe the current release.
 
 ## The page and the terminal
 
