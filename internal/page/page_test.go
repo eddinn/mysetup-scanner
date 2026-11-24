@@ -138,7 +138,7 @@ func TestWithoutSendingThePageGivesTheCopySteps(t *testing.T) {
 		`<a class="button secondary" href="https://mysetup.is/setups" target="_blank" rel="noopener noreferrer">Open mysetup.is in a new tab</a>`,
 		`Click your build.`, `"Create setup"`, `Scroll down to "Hardware" and find "Scan this computer".`,
 		`"Paste your report here"`, `Click "Review the report".`, `id="done">Done</button>`,
-		"this version cannot send at all", `href="report.txt" download>Save it as a file</a>`,
+		"This version cannot send it anywhere.", `href="report.txt" download>Save it as a file</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the page lacks %q", want)
@@ -154,8 +154,8 @@ func sendingServer(t *testing.T, link string, err error) (*Server, *[]string) {
 	t.Helper()
 	s, _ := newServer(t, time.Minute, time.Minute)
 	var sent []string
-	s.content.Send = func(_ context.Context, code string) (string, error) {
-		sent = append(sent, code)
+	s.content.Send = func(_ context.Context) (string, error) {
+		sent = append(sent, "sent")
 
 		return link, err
 	}
@@ -179,22 +179,24 @@ func TestWithSendingThePageGivesTheSendStepsFirst(t *testing.T) {
 	s, _ := sendingServer(t, "", nil)
 	body := request(s, http.MethodGet, base(s), nil).Body.String()
 	for _, want := range []string{
-		"Send it to your build in 4 steps", `"Get a code"`, `id="code" name="code"`, `id="send">Send to my build</button>`,
-		`id="review" hidden`, `Check each part, then click "Add these parts".`, `id="done">Done</button>`,
-		"<summary>Or copy and paste it instead</summary>", `id="copy">Copy report</button>`,
-		"It sends the report below to mysetup.is, and nothing else.",
+		"Add it to your build in 3 steps", `id="send">Send to mysetup.is</button>`, "This tab then opens mysetup.is.",
+		`choose your build and click "Review this scan".`, `Check each part, then click "Add these parts".`, `id="done">Done</button>`,
+		"<summary>Or copy and paste it instead</summary>", `id="copy">Copy report</button>`, `"Paste your report here"`,
+		"It sends the report below to mysetup.is, and nothing else.", "Nothing is sent until you click Send",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the page lacks %q", want)
 		}
 	}
-	if strings.Contains(body, "cannot send") {
-		t.Error("a page that sends says it cannot")
+	for _, gone := range []string{"cannot send", "code", "Get a code"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("a page that sends without a code says %q", gone)
+		}
 	}
 }
 
-func TestOnlyThePageItselfCanSendAndOnlyTheCodeComesFromIt(t *testing.T) {
-	s, sent := sendingServer(t, "https://mysetup.is/setups/01M7/components/scan/01M8", nil)
+func TestOnlyThePageItselfCanSendAndNothingButTheAskComesFromIt(t *testing.T) {
+	s, sent := sendingServer(t, "https://mysetup.is/scan/claim/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE", nil)
 	origin := "http://" + s.host
 	json := map[string]string{"Origin": origin, "Content-Type": "application/json"}
 	for _, header := range []map[string]string{
@@ -204,24 +206,25 @@ func TestOnlyThePageItselfCanSendAndOnlyTheCodeComesFromIt(t *testing.T) {
 		// A form another site posts cannot set this content type without asking first.
 		{"Origin": origin, "Content-Type": "text/plain"},
 	} {
-		if got := sendRequest(s, `{"code": "K7QD-M2XP"}`, header).Code; got != http.StatusForbidden {
+		if got := sendRequest(s, `{}`, header).Code; got != http.StatusForbidden {
 			t.Errorf("%v: %d, want 403", header, got)
 		}
 	}
-	if got := sendRequest(s, `{"code": `, json).Code; got != http.StatusBadRequest {
+	if got := sendRequest(s, `{`, json).Code; got != http.StatusBadRequest {
 		t.Errorf("broken JSON: %d", got)
 	}
-	if got := sendRequest(s, `{"code": "`+strings.Repeat("A", 2000)+`"}`, json).Code; got != http.StatusBadRequest {
+	if got := sendRequest(s, `{"report": "`+strings.Repeat("A", 2000)+`"}`, json).Code; got != http.StatusBadRequest {
 		t.Errorf("a long body: %d", got)
 	}
 	if len(*sent) != 0 {
 		t.Fatalf("refused requests sent %v", *sent)
 	}
-	w := sendRequest(s, `{"code": "K7QD-M2XP", "report": "made up elsewhere"}`, json)
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"review_url":"https://mysetup.is/setups/01M7/components/scan/01M8"`) {
+	// What the page sends along is not read: the report sent is the one the page shows.
+	w := sendRequest(s, `{"report": "made up elsewhere"}`, json)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"claim_url":"https://mysetup.is/scan/claim/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"`) {
 		t.Fatalf("send: %d %s", w.Code, w.Body.String())
 	}
-	if len(*sent) != 1 || (*sent)[0] != "K7QD-M2XP" {
+	if len(*sent) != 1 {
 		t.Fatalf("sent %v", *sent)
 	}
 }
@@ -230,13 +233,13 @@ func TestTheSitesRefusalAndOtherErrorsReachThePageInWords(t *testing.T) {
 	json := func(s *Server) map[string]string {
 		return map[string]string{"Origin": "http://" + s.host, "Content-Type": "application/json"}
 	}
-	s, _ := sendingServer(t, "", &send.Refused{Message: "This code is wrong, was already used or has expired."})
-	if w := sendRequest(s, `{"code": "K7QD-M2XP"}`, json(s)); w.Code != http.StatusUnprocessableEntity ||
-		!strings.Contains(w.Body.String(), "This code is wrong, was already used or has expired.") {
+	s, _ := sendingServer(t, "", &send.Refused{Message: "Sending is busy right now."})
+	if w := sendRequest(s, `{}`, json(s)); w.Code != http.StatusUnprocessableEntity ||
+		!strings.Contains(w.Body.String(), "Sending is busy right now.") {
 		t.Errorf("refused: %d %s", w.Code, w.Body.String())
 	}
 	s, _ = sendingServer(t, "", errors.New("MySetup could not be reached (no route to host)"))
-	if w := sendRequest(s, `{"code": "K7QD-M2XP"}`, json(s)); w.Code != http.StatusBadGateway ||
+	if w := sendRequest(s, `{}`, json(s)); w.Code != http.StatusBadGateway ||
 		!strings.Contains(w.Body.String(), "The report was not sent: MySetup could not be reached (no route to host).") {
 		t.Errorf("unreachable: %d %s", w.Code, w.Body.String())
 	}

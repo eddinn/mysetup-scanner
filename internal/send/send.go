@@ -1,7 +1,8 @@
-// Package send hands the report to the member's build on MySetup with a code from the build page (MySetup's docs/scanner/design.md,
-// Pairing; the site's POST /api/scanner/reports). It is the only part of the app that uses the network, and only after the member
-// typed a code. It sends the report the member read, to an address fixed in a release build (site_release.go; staging only in a
-// development build, site_dev.go), follows no redirect, reads a bounded answer and takes a review link only on the same site.
+// Package send hands the report to MySetup when the member clicks Send to MySetup (MySetup's docs/scanner/design.md, One tab; the
+// site's POST /api/scanner/reports, without a code since 0.3.0). It is the only part of the app that uses the network, and only
+// after the member asked it to send. It sends the report the member read, to an address fixed in a release build (site_release.go;
+// staging only in a development build, site_dev.go), follows no redirect, reads a bounded answer and takes back only a one-time
+// link on the same site, where the member signs in and chooses the build.
 package send
 
 import (
@@ -13,7 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -26,8 +27,8 @@ const (
 	maxMessage = 300
 )
 
-// Refused is the site's answer for the member to read: a wrong, used or expired code, a report it does not take, too many tries.
-// The member can try again with another code.
+// Refused is the site's answer for the member to read: a report it does not take, too many tries, too many reports waiting. The
+// member can try again, or copy and paste the report instead.
 type Refused struct{ Message string }
 
 func (r *Refused) Error() string { return r.Message }
@@ -38,20 +39,16 @@ var client = &http.Client{
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 
-// Report sends the report with the code to MySetup and returns the address of its review on the member's build.
-func Report(ctx context.Context, code, report, version string) (string, error) {
-	return post(ctx, Endpoint(), code, report, version)
+// Report sends the report to MySetup and returns the one-time link that adds it to one of the member's builds there.
+func Report(ctx context.Context, report, version string) (string, error) {
+	return post(ctx, Endpoint(), report, version)
 }
 
 // Endpoint is the only address the app sends to: the upload route of Site.
 func Endpoint() string { return Site() + "/api/scanner/reports" }
 
-func post(ctx context.Context, endpoint, code, report, version string) (string, error) {
-	code = strings.TrimSpace(code)
-	if !looksLikeCode(code) {
-		return "", &Refused{"A code has 8 letters and digits, like K7QD-M2XP. Get one on your build page, then type it here."}
-	}
-	body, err := json.Marshal(map[string]string{"code": code, "report": report})
+func post(ctx context.Context, endpoint, report, version string) (string, error) {
+	body, err := json.Marshal(map[string]string{"report": report})
 	if err != nil {
 		return "", err
 	}
@@ -76,19 +73,20 @@ func post(ctx context.Context, endpoint, code, report, version string) (string, 
 	switch response.StatusCode {
 	case http.StatusCreated:
 		var created struct {
-			ReviewURL string `json:"review_url"`
+			ClaimURL string `json:"claim_url"`
 		}
 		if json.Unmarshal(answer, &created) != nil {
 			return "", errors.New("MySetup's answer could not be read")
 		}
 
-		return reviewLink(endpoint, created.ReviewURL)
-	case http.StatusUnprocessableEntity:
+		return claimLink(endpoint, created.ClaimURL)
+	case http.StatusUnprocessableEntity, http.StatusServiceUnavailable:
+		// A report it does not take, or too many waiting for their members just now: the site says which.
 		var refused struct {
 			Message string `json:"message"`
 		}
 		if json.Unmarshal(answer, &refused) != nil || plain(refused.Message) == "" {
-			return "", &Refused{"MySetup did not take the report. Get a new code on your build page and try again."}
+			return "", &Refused{"MySetup did not take the report. Try again in a few minutes, or copy and paste it instead."}
 		}
 
 		return "", &Refused{plain(refused.Message)}
@@ -103,35 +101,22 @@ func post(ctx context.Context, endpoint, code, report, version string) (string, 
 	}
 }
 
-// looksLikeCode says whether what was typed can be a code: 8 letters and digits, with any spaces and dashes. The site reads it.
-func looksLikeCode(code string) bool {
-	count := 0
-	for _, r := range code {
-		switch {
-		case r == ' ' || r == '-':
-		case r < unicode.MaxASCII && (unicode.IsLetter(r) || unicode.IsDigit(r)):
-			count++
-		default:
-			return false
-		}
-	}
+// claimPath is the only address the app opens on the site: the one-time link, a token of 43 URL-safe characters.
+var claimPath = regexp.MustCompile(`\A/scan/claim/[A-Za-z0-9_-]{43}\z`)
 
-	return count == 8
-}
-
-// reviewLink takes the review's address only on the site the report went to, and only a build's page there.
-func reviewLink(endpoint, link string) (string, error) {
+// claimLink takes the link only on the site the report went to, and only as the site makes it: nothing else is opened.
+func claimLink(endpoint, link string) (string, error) {
 	site, err := url.Parse(endpoint)
 	if err != nil {
 		return "", err
 	}
-	review, err := url.Parse(link)
-	if err != nil || review.Scheme != site.Scheme || review.Host != site.Host || !strings.HasPrefix(review.Path, "/setups/") ||
-		path.Clean(review.Path) != review.Path || review.RawPath != "" || review.User != nil || review.Fragment != "" {
-		return "", errors.New("MySetup's answer named an unexpected address, so the app does not show it")
+	claim, err := url.Parse(link)
+	if err != nil || claim.Scheme != site.Scheme || claim.Host != site.Host || !claimPath.MatchString(claim.Path) || claim.RawPath != "" ||
+		claim.RawQuery != "" || claim.User != nil || claim.Fragment != "" {
+		return "", errors.New("MySetup's answer named an unexpected address, so the app does not open it")
 	}
 
-	return review.String(), nil
+	return claim.String(), nil
 }
 
 // plain keeps a short line of printable text.

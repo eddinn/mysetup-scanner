@@ -1,5 +1,6 @@
 // Package page is the app's graphical front end: one page, served to the member's own browser from this computer only, showing
-// the report with a box for the code that sends it to the member's build, buttons to copy it and save it, and one to finish. It is an attack surface and is hardened as the design asks (MySetup's
+// the report with a button that sends it to MySetup and takes this tab on to choose the build, buttons to copy it and save it, and
+// one to finish. It is an attack surface and is hardened as the design asks (MySetup's
 // docs/scanner/design.md, Front ends): 127.0.0.1 only, a random port, a one-time token in every address, the Host header checked
 // against DNS rebinding, requests that change anything accepted only from the page itself, a content policy that lets the page
 // load nothing from anywhere else, and an end when the member is done or after a time without use.
@@ -31,9 +32,9 @@ type Content struct {
 	// BuildsURL is where the member finds their builds on MySetup, linked from the steps, and Site is that MySetup's name as the
 	// member reads it, such as mysetup.is: the steps name it, and a report is sent there and nowhere else.
 	BuildsURL, Site string
-	// Send sends Report with a code from the member's build page and returns its review's address (internal/send); nil offers
+	// Send sends Report to MySetup and returns the one-time link where the member chooses the build (internal/send); nil offers
 	// no sending.
-	Send func(ctx context.Context, code string) (string, error)
+	Send func(ctx context.Context) (string, error)
 }
 
 // Server is one page for one report.
@@ -164,7 +165,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		s.doneOnce.Do(func() { close(s.done) })
 	case action == "send" && r.Method == http.MethodPost && s.content.Send != nil:
-		// Only the page itself may send, and only the code comes from it: the report sent is the one the page shows.
+		// Only the page itself may send, and nothing but the ask comes from it: the report sent is the one the page shows.
 		if !s.fromPage(r) || r.Header.Get("Content-Type") != "application/json" {
 			http.Error(w, "Forbidden.", http.StatusForbidden)
 
@@ -181,25 +182,23 @@ func (s *Server) fromPage(r *http.Request) bool {
 	return r.Header.Get("Origin") == "http://"+s.host && (r.Header.Get("Sec-Fetch-Site") == "" || r.Header.Get("Sec-Fetch-Site") == "same-origin")
 }
 
-// send sends the report with the code the page typed, one send at a time, and answers the page with the review's address or what
-// went wrong, in words for the member.
+// send sends the report when the page asks, one send at a time, and answers the page with the one-time link to open, or what went
+// wrong, in words for the member.
 func (s *Server) send(w http.ResponseWriter, r *http.Request) {
-	var typed struct {
-		Code string `json:"code"`
-	}
-	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&typed) != nil {
+	var asked struct{}
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&asked) != nil {
 		http.Error(w, "Bad request.", http.StatusBadRequest)
 
 		return
 	}
 	s.sending.Lock()
 	defer s.sending.Unlock()
-	link, err := s.content.Send(r.Context(), typed.Code)
+	link, err := s.content.Send(r.Context())
 	w.Header().Set("Content-Type", "application/json")
 	var refused *send.Refused
 	switch {
 	case err == nil:
-		_ = json.NewEncoder(w).Encode(map[string]string{"review_url": link})
+		_ = json.NewEncoder(w).Encode(map[string]string{"claim_url": link})
 	case errors.As(err, &refused):
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": refused.Message})
@@ -241,10 +240,6 @@ pre { background: #18181b; border: 1px solid #27272a; border-radius: .75rem; pad
 .how { color: #a1a1aa; font-size: .95rem; }
 .status { display: block; min-height: 1.5rem; color: #6ee7b7; margin: .4rem 0 0; }
 .status.error { color: #fca5a5; }
-form.send { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .4rem; }
-input.code { font: 600 1.05rem ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .12em; text-transform: uppercase;
-  width: 11rem; padding: .55rem .8rem; border-radius: .75rem; border: 1px solid #3f3f46; background: #18181b; color: #fff; }
-input.code:focus { outline: 2px solid #6366f1; outline-offset: 1px; }
 [hidden] { display: none !important; }
 h2 { font-size: 1.15rem; color: #fff; margin: 1.5rem 0 .75rem; }
 .steps { margin: 0 0 1.25rem; padding-left: 1.6rem; }
@@ -259,35 +254,31 @@ details { margin: 0 0 1.25rem; } summary { cursor: pointer; color: #a5b4fc; font
 <body>
 <main>
 <h1>MySetup scan</h1>
-<p class="lead">Your computer's hardware report, read on this computer just now. Nothing is sent until you type a code from your
-build page below{{if not .CanSend}}, and this version cannot send at all{{end}}.</p>
+<p class="lead">Your computer's hardware report, read on this computer just now. {{if .CanSend}}Nothing is sent until you click Send
+to {{.Site}} below.{{else}}This version cannot send it anywhere.{{end}}</p>
 {{if .Notes}}<div class="notes" role="note">{{range .Notes}}<p>{{.}}</p>{{end}}</div>{{end}}
 {{if .CanSend}}
-<h2>Send it to your build in 4 steps</h2>
+<h2>Add it to your build in 3 steps</h2>
 <ol class="steps">
-<li><span class="step">Get a code on your build page:</span> <a class="button secondary" href="{{.BuildsURL}}" target="_blank" rel="noopener noreferrer">Open {{.Site}} in a new tab</a>
-<span class="hint">Sign in if it asks and click your build (no build yet? Click "Create setup" first). Scroll down to "Hardware", find
-"Scan this computer", open "With the MySetup app" and click "Get a code". The code works once, for 10 minutes.</span></li>
-<li><span class="step">Type the code here and click Send to my build:</span>
-<form class="send" id="send-form">
-<input class="code" id="code" name="code" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7QD-M2XP" aria-label="The code from your build page">
-<button type="submit" class="primary" id="send">Send to my build</button>
-</form>
+<li><span class="step">Click this button:</span> <button type="button" class="primary" id="send">Send to {{.Site}}</button>
 <span class="status" id="send-status" role="status" aria-live="polite"></span>
-<span class="hint">It sends the report below to {{.Site}}, and nothing else.</span></li>
-<li><span class="step">Open the review:</span> <a class="button primary" id="review" hidden target="_blank" rel="noopener noreferrer">Open the review</a>
-<span class="hint">The button appears once the report is sent. Check each part, then click "Add these parts". Nothing changes in your build
-until you do.</span></li>
-<li><span class="step">Come back to this tab and click:</span> <button type="button" class="secondary" id="done">Done</button></li>
+<span class="hint">It sends the report below to {{.Site}}, and nothing else. This tab then opens {{.Site}}.</span></li>
+<li><span class="step">On {{.Site}}, sign in if it asks, choose your build and click "Review this scan".</span>
+<span class="hint">The build whose page you opened last is chosen already. No build yet? That page says how to make one.</span></li>
+<li><span class="step">Check each part, then click "Add these parts".</span> Nothing changes in your build until you do. The app stops by
+itself a minute or two after this tab has gone on to {{.Site}}.</li>
 </ol>
 <details>
 <summary>Or copy and paste it instead</summary>
 <ol class="steps">
 <li><span class="step">Click this button:</span> <button type="button" class="secondary" id="copy">Copy report</button>
 <span class="status" id="status" role="status" aria-live="polite"></span></li>
-<li><span class="step">On your build page, scroll down to "Hardware" and find "Scan this computer".</span> Click in the box "Paste your
-report here", then paste: press <kbd>Ctrl</kbd>+<kbd>V</kbd> (on a Mac <kbd>Cmd</kbd>+<kbd>V</kbd>).</li>
+<li><span class="step">Open your builds on MySetup:</span> <a class="button secondary" href="{{.BuildsURL}}" target="_blank" rel="noopener noreferrer">Open {{.Site}} in a new tab</a>
+<span class="hint">Sign in if it asks, and click your build. No build yet? Click "Create setup" first.</span></li>
+<li><span class="step">Scroll down to "Hardware" and find "Scan this computer".</span> Click in the box "Paste your report here", then
+paste: press <kbd>Ctrl</kbd>+<kbd>V</kbd> (on a Mac <kbd>Cmd</kbd>+<kbd>V</kbd>).</li>
 <li><span class="step">Click "Review the report".</span> Check each part, then click "Add these parts".</li>
+<li><span class="step">Come back to this tab and click:</span> <button type="button" class="secondary" id="done">Done</button></li>
 </ol>
 </details>
 {{else}}
@@ -315,26 +306,23 @@ Done, close this tab, or after 15 minutes.</p>
 </main>
 <script nonce="{{.Nonce}}">
 const status = document.getElementById('status');
-// Sending: only the code goes from this page to the app, which sends the report shown here (internal/send).
-const sendForm = document.getElementById('send-form');
-if (sendForm) {
+// While this tab is open, it tells the app so; once it closes, the app stops by itself.
+const alive = setInterval(() => fetch('alive').catch(() => {}), 20000);
+// Sending: this page only asks; the app sends the report shown here (internal/send), and this tab goes on to the link it got back.
+const sendButton = document.getElementById('send');
+if (sendButton) {
   const sendStatus = document.getElementById('send-status');
-  sendForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const button = document.getElementById('send');
-    const code = document.getElementById('code');
-    button.disabled = true;
+  sendButton.addEventListener('click', async () => {
+    sendButton.disabled = true;
     sendStatus.classList.remove('error');
     sendStatus.textContent = 'Sending…';
     try {
-      const response = await fetch('send', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code: code.value})});
+      const response = await fetch('send', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
       const answer = await response.json();
-      if (response.ok && answer.review_url) {
-        const review = document.getElementById('review');
-        review.href = answer.review_url;
-        review.hidden = false;
-        code.disabled = true;
-        sendStatus.textContent = 'Sent. Now do step 3.';
+      if (response.ok && answer.claim_url) {
+        sendStatus.textContent = 'Sent. Opening the page to choose your build…';
+        clearInterval(alive);
+        location.assign(answer.claim_url);
         return;
       }
       sendStatus.classList.add('error');
@@ -343,7 +331,7 @@ if (sendForm) {
       sendStatus.classList.add('error');
       sendStatus.textContent = 'The app did not answer. If it has stopped, start it again.';
     }
-    button.disabled = false;
+    sendButton.disabled = false;
   });
 }
 document.getElementById('copy').addEventListener('click', async () => {
@@ -356,8 +344,6 @@ document.getElementById('copy').addEventListener('click', async () => {
     status.textContent = 'Your browser did not let this button copy. The report below is now selected: press Ctrl+C (on a Mac Cmd+C) to copy it, then do step 2.';
   }
 });
-// While this tab is open, it tells the app so; once it closes, the app stops by itself.
-const alive = setInterval(() => fetch('alive').catch(() => {}), 20000);
 document.getElementById('done').addEventListener('click', async () => {
   clearInterval(alive);
   try { await fetch('done', {method: 'POST'}); } catch (e) {}
