@@ -184,7 +184,8 @@ func TestWithSendingThePageGivesTheSendStepsFirst(t *testing.T) {
 		"<summary>Or copy and paste it instead</summary>", `id="copy">Copy report</button>`, `"Paste your report here"`,
 		"It sends the report below to mysetup.is, and nothing else.", "Nothing is sent until you click Send",
 		// The tab goes on to the link the app got back, and comes back fresh from the browser's cache.
-		"location.assign(answer.claim_url)", "alive = setInterval(checkIn, 20000);",
+		"location.assign(answer.claim_url)",
+		"if (!event.persisted || finished) return;\n  clearInterval(alive);\n  alive = setInterval(checkIn, 20000);", "finished = true;",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the page lacks %q", want)

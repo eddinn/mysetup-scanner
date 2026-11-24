@@ -313,8 +313,10 @@ const checkIn = () => fetch('alive').catch(() => {});
 let alive = setInterval(checkIn, 20000);
 // Back from mysetup.is by the browser's Back button, the page comes from its cache with its check-ins stopped: they start again in
 // place, so the report stays here to copy even when the app has stopped meanwhile (Codex's review, 2026-11-24).
+// After Done the app has stopped: nothing starts again then.
+let finished = false;
 addEventListener('pageshow', (event) => {
-  if (!event.persisted) return;
+  if (!event.persisted || finished) return;
   clearInterval(alive);
   alive = setInterval(checkIn, 20000);
   checkIn();
@@ -358,6 +360,7 @@ document.getElementById('copy').addEventListener('click', async () => {
   }
 });
 document.getElementById('done').addEventListener('click', async () => {
+  finished = true;
   clearInterval(alive);
   try { await fetch('done', {method: 'POST'}); } catch (e) {}
   status.textContent = '';
