@@ -16,7 +16,7 @@ not send. The member's steps, for each system and both ways of starting it (doub
 | How it is started | What it does |
 |---|---|
 | Double-clicked, or run with no option | Opens a page in your default browser with the report and three numbered steps to send it to the build: click Send to mysetup.is (that tab goes on to mysetup.is), choose the build there and click Review this scan, check each part. The five steps to copy and paste it instead, with Done, are in a fold under them |
-| `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it on standard error. Then, where it reads and writes a terminal, it gives the four steps to send it and asks whether to: Enter (or y) sends it and prints the one-time link; n, or the input ending, sends nothing and gives the five steps to copy and paste it. Where it cannot ask (its input redirected, or run by another program), it gives the copy steps and waits for nothing |
+| `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it on standard error. Then, where it reads and writes a terminal, it gives the four steps to send it and asks whether to: y (or yes) sends it and prints the one-time link and until when it works; Enter alone, n, or the input ending sends nothing and gives the five steps to copy and paste it. Where it cannot ask (its input redirected, or run by another program), it gives the copy steps and waits for nothing |
 | `mysetup-scan --no-browser` | Serves the page without opening a browser, and prints its address to open yourself |
 | There is no desktop | Prints the report in the terminal with the steps, and says why: over SSH or with no desktop (no `DISPLAY` or `WAYLAND_DISPLAY`), or no `xdg-open` |
 | Double-clicked on Linux or another Unix-like system | As with no option. It has no terminal to print to, so what goes wrong is said in the desktop's own message box |
@@ -45,7 +45,7 @@ never started as root. None of them is required; with none, the message goes whe
 Double-clicked on Windows, Windows opens a console window for the app alone. The app starts again without one and that window
 closes, so only the browser page is left. This works the same in the classic console and in Windows Terminal. If it cannot start
 again, it carries on in the window. Without a console it has nowhere to print, so it reports a problem in a message box. Run with
-`--cli` in a window of its own, it asks whether to send as in any terminal, then, unless the report was sent, copies it to the
+`--cli` in a window of its own, it asks whether to send as in any terminal, then copies the link when the report was sent, or the report when it was not, to the
 clipboard, and waits for Enter before the window closes. It counts a
 window as its own only when it is alone on the console and its input and output are that console. Another program that takes
 its output (WSL, or a script redirecting it) may give it a console of its own, but there it never waits: `app-v0.1.0-beta.2`
@@ -91,9 +91,11 @@ page). Without that nothing is sent, and the copy-and-paste way works as before.
   serves, never anything from the page. One send at a time. The page's own tab then goes on to the link, and the app ends about
   90 seconds later, as when its tab closes.
 - **In the terminal:** the app asks only when both its input and its error output are a terminal (on Windows, a console): run by
-  a script, with its input redirected, or from WSL, it never waits for an answer nobody can give. Enter (or y) sends and prints
-  the link, to open in a browser on this computer or another; n, or the input ending, stops. It tries up to three times, saying
-  after each what came of it; any other answer asks again.
+  a script, with its input redirected, or from WSL, it never waits for an answer nobody can give. Only y (or yes) sends, and it
+  prints the link and until when it works (from the site's `expires_at`), to open in a browser on this computer or another;
+  Enter alone, n, or the input ending stops, so Enter keeps 0.2.0's meaning (copy and paste) and nobody sends by habit (Codex's
+  review, 2026-11-24). It tries up to three times, saying after each what came of it; any other answer asks again. `429` says
+  when to try again from the site's `Retry-After` (half an hour without one).
 
 A development build, `go build -tags dev`, sends to MySetup's staging site instead, or to the site `MYSETUP_SCAN_SITE` names when
 that is `https://staging.mysetup.is` or `http://127.0.0.1` or `http://localhost` with a port, for a test

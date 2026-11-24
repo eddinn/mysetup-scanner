@@ -38,14 +38,14 @@ MySetup scan app $full for Linux ($2)
 
 1. Double-click mysetup-scan. If a box asks whether to run it, click Run (some file managers call it Execute).
    Your web browser opens a page with the report about this computer.
-2. Follow the steps on that page to send the report to your build on mysetup.is with a code from your
-   build page, or to copy and paste it there.
+2. Follow the steps on that page: click Send to mysetup.is, and that tab goes on to mysetup.is, where you
+   choose your build. Or copy and paste the report there instead.
 
 If double-clicking does nothing, your file manager does not start programs. Follow the steps
 "Linux: in a terminal" instead: https://github.com/eddinn/mysetup-scanner#the-app-step-by-step
 
-It reads hardware names, and sends the report to mysetup.is only when you type a code from your build page:
-nothing else is sent anywhere, no files are written, nothing is installed.
+It reads hardware names, and sends the report to mysetup.is only when you click Send to mysetup.is (or type y
+where the terminal asks): nothing else is sent anywhere, no files are written, nothing is installed.
 The source, the checksums and how to check this download: https://github.com/eddinn/mysetup-scanner
 EOF
     chmod 0755 "$stage/$name" "$stage/$name/mysetup-scan"

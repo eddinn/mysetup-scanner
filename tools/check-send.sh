@@ -68,11 +68,11 @@ cmp "$work/received" "$work/report.txt"
 test "$(wc -l < "$work/sends")" -eq 2
 
 # In a terminal (--cli) the app asks whether to send after the report: here in script(1)'s terminal, on Linux, where it is always
-# there (util-linux), with the program built here. The site's refusal is said in its words and Enter tries again; then it sends the
-# same report and prints the link.
+# there (util-linux), with the program built here. Only y sends: the site's refusal is said in its words and y tries again; then it
+# sends the same report and prints the link.
 if [ "$(uname -s)" = Linux ] && [ -z "${1:-}" ]; then
     rm -f "$work/sends" "$work/received"
-    printf '\n\n' |
+    printf 'y\ny\n' |
         MYSETUP_SCAN_SITE=$site script -qec "'$app_file' --cli > '$work/cli-report.txt'" /dev/null | tr -d '\r' > "$work/cli.txt"
     grep -q 'Sending is busy right now.' "$work/cli.txt"
     grep -A1 '^Sent. Open this link in your web browser, on this computer or another, to add the report to your build:$' "$work/cli.txt" > "$work/sent.txt"

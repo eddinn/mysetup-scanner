@@ -26,12 +26,12 @@ Below, click a line to open its steps.
 ## The app, step by step
 
 One file with nothing to install. It reads your hardware, and sends the report to mysetup.is only when you click **Send to
-mysetup.is** (or press Enter where the terminal asks); it writes no files and installs nothing. Its page is served from your own computer only, and the app stops when you
+mysetup.is** (or type **y** where the terminal asks); it writes no files and installs nothing. Its page is served from your own computer only, and the app stops when you
 click Done, close the page, or after 15 minutes.
 
 There are two ways to start it. Pick one and follow its steps to the end:
 
-- **Double-click it** (the usual way): your report opens on a page in your web browser, with a Copy button and the steps.
+- **Double-click it** (the usual way): your report opens on a page in your web browser, with a Send button and the steps.
 - **In a terminal, with `--cli`**: the report is printed in the terminal, with the steps. This is the way on a server or over SSH.
 
 <details>
@@ -96,9 +96,9 @@ message box.
 
    If a blue box says "Windows protected your PC", click **More info**, then **Run anyway**.
 5. The report is printed in the window, from the line `mysetup-report 1` down to `mysetup-report-end`, with the steps under it.
-   The app then asks whether to send it: press **Enter** and open the link it prints, as in
-   [the last steps](#last-send-it-to-your-build). To copy and paste the report instead, type **n** and press **Enter**, select the
-   report's lines with the mouse, press **Ctrl+C**, and go on with [these steps](#last-paste-it-on-your-build).
+   The app then asks whether to send it: type **y**, press **Enter** and open the link it prints, as in
+   [the last steps](#last-send-it-to-your-build). To copy and paste the report instead, press **Enter** alone, select the report's
+   lines with the mouse, press **Ctrl+C**, and go on with [these steps](#last-paste-it-on-your-build).
 
 </details>
 
@@ -122,10 +122,10 @@ message box.
    On an ARM computer, write `arm64` instead of `x86-64` in the last three lines. If you already downloaded the file with your
    browser, skip the `curl` line.
 3. The report is printed in the terminal, from the line `mysetup-report 1` down to `mysetup-report-end`, with the steps under it.
-   The app then asks whether to send it: press **Enter** and open the link it prints, as in
+   The app then asks whether to send it: type **y**, press **Enter** and open the link it prints, as in
    [the last steps](#last-send-it-to-your-build); over SSH, open it in the browser of the computer you are sitting at. To copy and
-   paste the report instead, type **n** and press **Enter**, select the report's lines with the mouse, press **Ctrl+Shift+C**, and
-   go on with [these steps](#last-paste-it-on-your-build).
+   paste the report instead, press **Enter** alone, select the report's lines with the mouse, press **Ctrl+Shift+C**, and go on
+   with [these steps](#last-paste-it-on-your-build).
 
 Started with `sudo` (`sudo ./mysetup-scan-linux-x86-64/mysetup-scan --cli`), it also reads memory modules on systems without udev.
 
@@ -263,9 +263,10 @@ MySetup's build page shows each file's SHA-256 too. The scripts are not code-sig
 
 The app, on its page or in the terminal:
 
-1. Send it: on its page, click **Send to mysetup.is**, and that tab goes on to mysetup.is; in the terminal where it asks, press
-   **Enter**, then open the link it prints in your web browser (on this computer or another). It sends the report you see to
-   mysetup.is, and nothing else. The link works once, for 30 minutes.
+1. Send it: on its page, click **Send to mysetup.is**, and that tab goes on to mysetup.is; in the terminal where it asks, type
+   **y** and press **Enter**, then open the link it prints in your web browser (on this computer or another): select it, copy it,
+   paste it into the address bar and press **Enter**. It sends the report you see to mysetup.is, and nothing else. The link works
+   once, for 30 minutes.
 2. Sign in if it asks. Check that the scan shown is yours (the computer, the processor, the system).
 3. Choose your build and click **Review this scan**. The build whose page you opened last is chosen already. No build yet? The
    page says how to make one.

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const report = "mysetup-report 1\nsource=app/0.3.0\nmysetup-report-end\n"
@@ -36,8 +37,8 @@ const token = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
 func TestTheReportGoesWithoutACodeAndTheOneTimeLinkComesBack(t *testing.T) {
 	server, got := site(t, http.StatusCreated, `{"claim_url": "SITE/scan/claim/`+token+`", "expires_at": "2026-11-24T23:30:00+01:00"}`)
 	link, err := post(context.Background(), server.URL+"/api/scanner/reports", report, "0.3.0")
-	if err != nil || link != server.URL+"/scan/claim/"+token {
-		t.Fatalf("link %q, error %v", link, err)
+	if err != nil || link.URL != server.URL+"/scan/claim/"+token || !link.Expires.Equal(time.Date(2026, 11, 24, 22, 30, 0, 0, time.UTC)) {
+		t.Fatalf("link %+v, error %v", link, err)
 	}
 	want := map[string]string{"method": "POST", "path": "/api/scanner/reports", "type": "application/json", "accept": "application/json",
 		"agent": "MySetup-Scanner/0.3.0", "report": report}
@@ -69,7 +70,7 @@ func TestEveryOtherAnswerIsAnErrorWithNoLink(t *testing.T) {
 		refused bool
 		says    string
 	}{
-		{http.StatusTooManyRequests, `{}`, true, "Too many tries"},
+		{http.StatusTooManyRequests, `{}`, true, "Too many tries from your network. Try again in half an hour"},
 		{http.StatusServiceUnavailable, `oops`, true, "Try again in a few minutes"},
 		{http.StatusNotFound, `{"message": "Not found."}`, false, "not open on MySetup yet"},
 		{http.StatusRequestEntityTooLarge, ``, false, "too large"},
@@ -90,8 +91,40 @@ func TestEveryOtherAnswerIsAnErrorWithNoLink(t *testing.T) {
 		server, _ := site(t, c.status, c.answer)
 		link, err := post(context.Background(), server.URL+"/api/scanner/reports", report, "0.3.0")
 		var refused *Refused
-		if link != "" || err == nil || errors.As(err, &refused) != c.refused || !strings.Contains(err.Error(), c.says) {
+		if link.URL != "" || err == nil || errors.As(err, &refused) != c.refused || !strings.Contains(err.Error(), c.says) {
 			t.Errorf("%d %s: link %q, error %v", c.status, c.answer, link, err)
+		}
+	}
+}
+
+func TestTooManyTriesSaysWhenFromRetryAfter(t *testing.T) {
+	for header, says := range map[string]string{"1500": "Try again in 25 minutes,", "30": "Try again in a minute,", "soon": "Try again in half an hour,"} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Retry-After", header)
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, `{"message": "Too Many Attempts."}`)
+		}))
+		_, err := post(context.Background(), server.URL+"/api/scanner/reports", report, "0.3.0")
+		server.Close()
+		if err == nil || !strings.Contains(err.Error(), says) || !strings.Contains(err.Error(), "or copy and paste the report instead") {
+			t.Errorf("Retry-After %s: %v", header, err)
+		}
+	}
+}
+
+func TestOnlyTheLinkAsMySetupMakesItIsTaken(t *testing.T) {
+	const endpoint = "https://mysetup.is/api/scanner/reports"
+	if got, err := claimLink(endpoint, "https://mysetup.is/scan/claim/"+token+"?"); err != nil || got != "https://mysetup.is/scan/claim/"+token {
+		t.Errorf("the link itself: %q, %v", got, err)
+	}
+	for _, link := range []string{
+		"http://mysetup.is/scan/claim/" + token, "https://mysetup.is:443/scan/claim/" + token, "https://MYSETUP.IS/scan/claim/" + token,
+		"https://mysetup.is./scan/claim/" + token, "https://user@mysetup.is/scan/claim/" + token, "https://mysetup.is.example.com/scan/claim/" + token,
+		"//mysetup.is/scan/claim/" + token, "/scan/claim/" + token, "javascript:alert(1)", "https://mysetup.is/scan/claim/" + token + "/x",
+		"https://mysetup.is/scan/claim/" + token[:42], "https://mysetup.is/scan/claim/" + token + "%2F", " https://mysetup.is/scan/claim/" + token,
+	} {
+		if got, err := claimLink(endpoint, link); err == nil {
+			t.Errorf("%q was taken as %q", link, got)
 		}
 	}
 }

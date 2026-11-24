@@ -151,8 +151,8 @@ jobs:
           if kill -0 "$app" 2>/dev/null; then echo "The app did not end after Done."; kill "$app"; exit 1; fi
           wait "$app"
       # Sending, end to end with a development build and a stand-in for MySetup on the runner: the page's send refused from
-      # another site, a wrong code answered in the site's words, the right one sending the same report; on Linux, the terminal
-      # asking for the code too.
+      # another site, the site's refusal answered in its words, the next send carrying the same report and giving the link; on
+      # Linux, the terminal asking and printing the link too.
       - name: Sending on this runner
         shell: bash
         run: tools/check-send.sh

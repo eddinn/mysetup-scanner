@@ -159,7 +159,7 @@ func ownWindow() bool {
 	return n == 1
 }
 
-// canAsk says whether the app can ask the member for a code: it reads and writes a console, not a pipe or a file another
+// canAsk says whether the app can ask the member whether to send: it reads and writes a console, not a pipe or a file another
 // program gave it, so a member sees the question and can answer it.
 func canAsk() bool {
 	for _, f := range []*os.File{os.Stdin, os.Stderr} {
@@ -207,12 +207,16 @@ func copyToClipboard(text string) bool {
 
 // keepWindowOpen, in a window of its own, waits for Enter before the window closes, and first, unless the report was sent, copies
 // it to the clipboard and says so.
-func keepWindowOpen(report string, sent bool, stderr io.Writer) {
+func keepWindowOpen(report, link string, stderr io.Writer) {
 	if !ownWindow() {
 		return
 	}
 	fmt.Fprintln(stderr)
-	if sent {
+	if link != "" {
+		// A stray Enter closes the window, and the link with it: it is on the clipboard as well.
+		if copyToClipboard(link) {
+			fmt.Fprintln(stderr, "The link is also copied for you: paste it into your browser's address bar and press Enter.")
+		}
 		fmt.Fprintln(stderr, "Press Enter here to close this window.")
 		_, _ = input.ReadString('\n')
 

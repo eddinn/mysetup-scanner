@@ -306,6 +306,8 @@ Done, close this tab, or after 15 minutes.</p>
 </main>
 <script nonce="{{.Nonce}}">
 const status = document.getElementById('status');
+// Back from mysetup.is by the browser's Back button, the page comes from its cache with its check-ins stopped: load it afresh.
+addEventListener('pageshow', (event) => { if (event.persisted) location.reload(); });
 // While this tab is open, it tells the app so; once it closes, the app stops by itself.
 const alive = setInterval(() => fetch('alive').catch(() => {}), 20000);
 // Sending: this page only asks; the app sends the report shown here (internal/send), and this tab goes on to the link it got back.

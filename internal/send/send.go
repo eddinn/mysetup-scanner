@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -39,22 +40,29 @@ var client = &http.Client{
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 
+// Link is the one-time link MySetup gives back for a report: where the member signs in and chooses the build, and until when it
+// works (zero when the site did not say).
+type Link struct {
+	URL     string
+	Expires time.Time
+}
+
 // Report sends the report to MySetup and returns the one-time link that adds it to one of the member's builds there.
-func Report(ctx context.Context, report, version string) (string, error) {
+func Report(ctx context.Context, report, version string) (Link, error) {
 	return post(ctx, Endpoint(), report, version)
 }
 
 // Endpoint is the only address the app sends to: the upload route of Site.
 func Endpoint() string { return Site() + "/api/scanner/reports" }
 
-func post(ctx context.Context, endpoint, report, version string) (string, error) {
+func post(ctx context.Context, endpoint, report, version string) (Link, error) {
 	body, err := json.Marshal(map[string]string{"report": report})
 	if err != nil {
-		return "", err
+		return Link{}, err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return Link{}, err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
@@ -62,43 +70,65 @@ func post(ctx context.Context, endpoint, report, version string) (string, error)
 
 	response, err := client.Do(request)
 	if err != nil {
-		return "", fmt.Errorf("MySetup could not be reached (%s)", plain(err.Error()))
+		return Link{}, fmt.Errorf("MySetup could not be reached (%s)", plain(err.Error()))
 	}
 	defer response.Body.Close()
 	answer, err := io.ReadAll(io.LimitReader(response.Body, maxAnswer))
 	if err != nil {
-		return "", fmt.Errorf("MySetup's answer could not be read (%s)", plain(err.Error()))
+		return Link{}, fmt.Errorf("MySetup's answer could not be read (%s)", plain(err.Error()))
 	}
 
 	switch response.StatusCode {
 	case http.StatusCreated:
 		var created struct {
-			ClaimURL string `json:"claim_url"`
+			ClaimURL  string `json:"claim_url"`
+			ExpiresAt string `json:"expires_at"`
 		}
 		if json.Unmarshal(answer, &created) != nil {
-			return "", errors.New("MySetup's answer could not be read")
+			return Link{}, errors.New("MySetup's answer could not be read")
 		}
+		link, err := claimLink(endpoint, created.ClaimURL)
+		if err != nil {
+			return Link{}, err
+		}
+		expires, _ := time.Parse(time.RFC3339, created.ExpiresAt)
 
-		return claimLink(endpoint, created.ClaimURL)
+		return Link{URL: link, Expires: expires}, nil
 	case http.StatusUnprocessableEntity, http.StatusServiceUnavailable:
 		// A report it does not take, or too many waiting for their members just now: the site says which.
 		var refused struct {
 			Message string `json:"message"`
 		}
 		if json.Unmarshal(answer, &refused) != nil || plain(refused.Message) == "" {
-			return "", &Refused{"MySetup did not take the report. Try again in a few minutes, or copy and paste it instead."}
+			return Link{}, &Refused{"MySetup did not take the report. Try again in a few minutes, or copy and paste it instead."}
 		}
 
-		return "", &Refused{plain(refused.Message)}
+		return Link{}, &Refused{plain(refused.Message)}
 	case http.StatusTooManyRequests:
-		return "", &Refused{"Too many tries from your network. Wait a minute, then try again."}
+		// The site's limits last from a minute to half an hour: it says how long in Retry-After.
+		return Link{}, &Refused{"Too many tries from your network. Try again " + retryIn(response.Header.Get("Retry-After")) +
+			", or copy and paste the report instead."}
 	case http.StatusRequestEntityTooLarge:
-		return "", errors.New("MySetup says the report is too large to send. Copy and paste it instead")
+		return Link{}, errors.New("MySetup says the report is too large to send. Copy and paste it instead")
 	case http.StatusNotFound:
-		return "", errors.New("sending reports is not open on MySetup yet. Copy and paste the report instead")
+		return Link{}, errors.New("sending reports is not open on MySetup yet. Copy and paste the report instead")
 	default:
-		return "", fmt.Errorf("MySetup answered with an error (HTTP %d). Try again later, or copy and paste the report instead", response.StatusCode)
+		return Link{}, fmt.Errorf("MySetup answered with an error (HTTP %d). Try again later, or copy and paste the report instead", response.StatusCode)
 	}
+}
+
+// retryIn says when to try again, from a Retry-After of seconds; without one, in half an hour, the longest the site's limits last.
+func retryIn(header string) string {
+	seconds, err := strconv.Atoi(strings.TrimSpace(header))
+	if err != nil || seconds <= 0 || seconds > 24*60*60 {
+		return "in half an hour"
+	}
+	minutes := (seconds + 59) / 60
+	if minutes == 1 {
+		return "in a minute"
+	}
+
+	return "in " + strconv.Itoa(minutes) + " minutes"
 }
 
 // claimPath is the only address the app opens on the site: the one-time link, a token of 43 URL-safe characters.
@@ -116,7 +146,8 @@ func claimLink(endpoint, link string) (string, error) {
 		return "", errors.New("MySetup's answer named an unexpected address, so the app does not open it")
 	}
 
-	return claim.String(), nil
+	// Made again from the parts checked, so nothing else of the answer (an empty query, say) comes along.
+	return site.Scheme + "://" + site.Host + claim.Path, nil
 }
 
 // plain keeps a short line of printable text.
