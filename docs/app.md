@@ -5,7 +5,9 @@ shows it on a page in your own browser, or in the terminal with `--cli`. The des
 `docs/scanner/design.md` ("The app: the operator's decisions"). It is built in stages. Stage 1 is reading and the two front ends.
 Stage 2 is sending: the site's codes, upload route and checks are MySetup's, and the app sends its report with a code from the
 build page ([Sending](#sending)), on the page and in the terminal, since 0.2.0 (released 2026-11-13, after the operator's test
-on staging and his go). Code signing comes after stage 2. The current release is `app-v0.2.0`; `app-v0.1.0` (2026-11-12) could
+on staging and his go). Since 0.3.0 it sends without a code, and MySetup answers with a one-time link where the member signs in
+and chooses the build: one tab instead of three (MySetup's `docs/scanner/design.md`, One tab; the operator's go of 2026-11-24).
+Code signing comes after stage 2. The current release is `app-v0.2.0`; `app-v0.1.0` (2026-11-12) could
 not send. The member's steps, for each system and both ways of starting it (double-click, or a terminal with `--cli`), are in the
 [README](../README.md); they describe the current release.
 
@@ -13,8 +15,8 @@ not send. The member's steps, for each system and both ways of starting it (doub
 
 | How it is started | What it does |
 |---|---|
-| Double-clicked, or run with no option | Opens a page in your default browser with the report and four numbered steps to send it to the build: get a code on the build page, type it and click Send to my build, open the review, Done. The six steps to copy and paste it instead are in a fold under them |
-| `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it on standard error. Then, where it reads and writes a terminal, it gives the three steps to send it and asks for the code; Enter without one sends nothing and gives the five steps to copy and paste it. Where it cannot ask (its input redirected, or run by another program), it gives the copy steps and waits for nothing |
+| Double-clicked, or run with no option | Opens a page in your default browser with the report and three numbered steps to send it to the build: click Send to mysetup.is (that tab goes on to mysetup.is), choose the build there and click Review this scan, check each part. The five steps to copy and paste it instead, with Done, are in a fold under them |
+| `mysetup-scan --cli` | Prints the report in the terminal, always: the report on standard output, and everything said around it on standard error. Then, where it reads and writes a terminal, it gives the four steps to send it and asks whether to: Enter (or y) sends it and prints the one-time link; n, or the input ending, sends nothing and gives the five steps to copy and paste it. Where it cannot ask (its input redirected, or run by another program), it gives the copy steps and waits for nothing |
 | `mysetup-scan --no-browser` | Serves the page without opening a browser, and prints its address to open yourself |
 | There is no desktop | Prints the report in the terminal with the steps, and says why: over SSH or with no desktop (no `DISPLAY` or `WAYLAND_DISPLAY`), or no `xdg-open` |
 | Double-clicked on Linux or another Unix-like system | As with no option. It has no terminal to print to, so what goes wrong is said in the desktop's own message box |
@@ -43,7 +45,7 @@ never started as root. None of them is required; with none, the message goes whe
 Double-clicked on Windows, Windows opens a console window for the app alone. The app starts again without one and that window
 closes, so only the browser page is left. This works the same in the classic console and in Windows Terminal. If it cannot start
 again, it carries on in the window. Without a console it has nowhere to print, so it reports a problem in a message box. Run with
-`--cli` in a window of its own, it asks for the code as in any terminal, then, unless the report was sent, copies it to the
+`--cli` in a window of its own, it asks whether to send as in any terminal, then, unless the report was sent, copies it to the
 clipboard, and waits for Enter before the window closes. It counts a
 window as its own only when it is alone on the console and its input and output are that console. Another program that takes
 its output (WSL, or a script redirecting it) may give it a console of its own, but there it never waits: `app-v0.1.0-beta.2`
@@ -61,7 +63,7 @@ The page is an attack surface and is hardened as the design asks ([internal/page
 - Done and Send, the two requests that do anything, are POSTs accepted only with the page's own `Origin` (and `Sec-Fetch-Site:
   same-origin` where the browser sends it). Another site's request cannot end the app or send anything. Send also needs
   `Content-Type: application/json`, which a form on another site cannot set without asking first, takes a body of 1 KB at most,
-  and takes only the code from the page (see [Sending](#sending)).
+  and takes nothing from the page but the ask (see [Sending](#sending)).
 - A content policy lets the page load nothing from anywhere else: `default-src 'none'`, with its one style and one script allowed
   by a fresh nonce for each response, and no framing. It is also sent with `nosniff`, `no-referrer`, `no-store` and same-origin
   opener and resource policies.
@@ -70,27 +72,28 @@ The page is an attack surface and is hardened as the design asks ([internal/page
 
 ## Sending
 
-The app sends its report only when the member types a code from their build page: typing it is the approval (MySetup's
-`docs/scanner/design.md`, Pairing). Without a code nothing is sent, and the copy-and-paste way works as before.
+The app sends its report only when the member asks it to: clicking Send to mysetup.is on the page, or pressing Enter where the
+terminal asks, is the approval (MySetup's `docs/scanner/design.md`, One tab, since 0.3.0; 0.2.0 sent with a code from the build
+page). Without that nothing is sent, and the copy-and-paste way works as before.
 [internal/send](../internal/send/send.go) does the sending:
 
 - **Where:** a release build sends only to `https://mysetup.is/api/scanner/reports`, fixed in the program
   ([site_release.go](../internal/send/site_release.go)); nothing a member types or a page sends can change it. It follows no
   redirect, gives up after 30 seconds, and reads at most 64 KB of the answer.
-- **What:** one HTTPS POST of JSON `{"code": "...", "report": "..."}` with the report exactly as the page and `--cli` show it, and
-  the headers `Content-Type` and `Accept: application/json` and `User-Agent: MySetup-Scanner/<version>`. No cookie, no other
-  data. A code is checked first: 8 letters and digits (spaces and dashes are ignored, as the site ignores them); anything else is
-  never sent.
-- **The answer:** `201` gives the review's address, taken only when it is on the same site and under `/setups/` (with no `..`
-  or encoded slash to climb out of it). `422` is the
-  site's own words for the member (a wrong, used or expired code, or a report it refuses), shown as they are, cut to 300
-  printable characters. `429` is "too many tries", `413` "too large", `404` "sending is not open on MySetup yet" (the site's
-  switch is off), and anything else an error with its status. A network error says MySetup could not be reached.
-- **On the page:** the code goes from the page to the app (`POST send`, checked as above), and the app sends the report it
-  serves, never anything from the page but the code. One send at a time. The page then shows a button to open the review.
+- **What:** one HTTPS POST of JSON `{"report": "..."}` with the report exactly as the page and `--cli` show it, and the headers
+  `Content-Type` and `Accept: application/json` and `User-Agent: MySetup-Scanner/<version>`. No code, no cookie, no other data.
+- **The answer:** `201` gives the one-time link, taken only when it is on the same site and is exactly `/scan/claim/` and a token
+  of 43 URL-safe characters (no query, fragment, user or encoding); it works once, for 30 minutes. `422` and `503` are the site's
+  own words for the member (a report it refuses, or too many waiting just now), shown as they are, cut to 300 printable
+  characters. `429` is "too many tries", `413` "too large", `404` "sending is not open on MySetup yet" (the site's switch is off),
+  and anything else an error with its status. A network error says MySetup could not be reached.
+- **On the page:** the page only asks (`POST send`, checked as above, with an empty JSON body), and the app sends the report it
+  serves, never anything from the page. One send at a time. The page's own tab then goes on to the link, and the app ends about
+  90 seconds later, as when its tab closes.
 - **In the terminal:** the app asks only when both its input and its error output are a terminal (on Windows, a console): run by
-  a script, with its input redirected, or from WSL, it never waits for an answer nobody can give. It takes up to five codes,
-  saying after each what came of it, and Enter without a code stops.
+  a script, with its input redirected, or from WSL, it never waits for an answer nobody can give. Enter (or y) sends and prints
+  the link, to open in a browser on this computer or another; n, or the input ending, stops. It tries up to three times, saying
+  after each what came of it; any other answer asks again.
 
 A development build, `go build -tags dev`, sends to MySetup's staging site instead, or to the site `MYSETUP_SCAN_SITE` names when
 that is `https://staging.mysetup.is` or `http://127.0.0.1` or `http://localhost` with a port, for a test
@@ -200,7 +203,7 @@ python3 -B tests/validate_report.py report.txt
 ./mysetup-scan
 ```
 
-The last line opens the page. `< /dev/null` keeps `--cli` from asking for a code. Sending is checked end to end, on this
+The last line opens the page. `< /dev/null` keeps `--cli` from asking whether to send. Sending is checked end to end, on this
 computer only, with a development build and a stand-in for MySetup (Python 3 and curl):
 
 ```sh
@@ -208,8 +211,8 @@ tools/check-send.sh
 ```
 
 ```text
-The terminal asked for the code and sent the report.
-Sending works end to end: refused from another site, the site's words for a wrong code, the same report for the right one.
+The terminal asked, sent the report and printed the link.
+Sending works end to end: refused from another site, the site's refusal in its words, the same report and the link.
 ```
 
 The first line comes only on Linux, where `script` gives the app a terminal to ask in. From WSL, a Windows development build is

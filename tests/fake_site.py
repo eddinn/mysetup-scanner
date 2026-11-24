@@ -1,7 +1,8 @@
-"""A stand-in for MySetup's upload route, POST /api/scanner/reports, for tools/check-send.sh. It answers as the site does
-(MySetup's docs/scanner/design.md, Stage 2): 201 with the review's address for the one right code, typed in any case and with
-any spaces and dashes as the site takes it, 422 with the site's own words for any other, 400 for a request not made as the app makes it. It listens on this computer only, writes its port to <dir>/port,
-each code it is sent to <dir>/codes, and the report sent with the right code to <dir>/received.
+"""A stand-in for MySetup's upload route, POST /api/scanner/reports, for tools/check-send.sh. It answers as the site does for a
+report sent without a code (MySetup's docs/scanner/design.md, One tab; app 0.3.0): the first report it is sent gets 503 with the
+site's own words, as when too many wait, and every later one 201 with a one-time link; a report sent with a code, or a request
+not made as the app makes it, gets 400. It listens on this computer only, writes its port to <dir>/port, a line for each report
+it is sent to <dir>/sends, and the last report it took to <dir>/received.
     python3 -B tests/fake_site.py <dir>
 """
 
@@ -10,8 +11,8 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-CODE = "K7QD-M2XP"
-WRONG = "This code is wrong, was already used or has expired. Get a new code on your build page and type it again."
+TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
+BUSY = "Sending is busy right now. Try again in a few minutes, or copy the report and paste it in the box on your build page."
 
 
 class Site(BaseHTTPRequestHandler):
@@ -25,14 +26,21 @@ class Site(BaseHTTPRequestHandler):
             self.answer(400, {"message": "Not sent as the app sends."})
             return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        with open(os.path.join(sys.argv[1], "codes"), "a", encoding="utf-8", newline="") as codes:
-            codes.write(body["code"] + "\n")
-        if body["code"].replace(" ", "").replace("-", "").upper() != CODE.replace("-", ""):
-            self.answer(422, {"message": WRONG})
+        if "code" in body or not isinstance(body.get("report"), str):
+            self.answer(400, {"message": "Not sent as the app sends since 0.3.0."})
+            return
+        sends = os.path.join(sys.argv[1], "sends")
+        with open(sends, "a", encoding="utf-8", newline="") as f:
+            f.write("sent\n")
+        with open(sends, encoding="utf-8") as f:
+            first = len(f.readlines()) == 1
+        if first:
+            self.answer(503, {"message": BUSY})
             return
         with open(os.path.join(sys.argv[1], "received"), "w", encoding="utf-8", newline="") as received:
             received.write(body["report"])
-        self.answer(201, {"review_url": "http://127.0.0.1:%d/setups/01M7/components/scan/01M8" % self.server.server_address[1]})
+        self.answer(201, {"claim_url": "http://127.0.0.1:%d/scan/claim/%s" % (self.server.server_address[1], TOKEN),
+                          "expires_at": "2026-11-24T23:30:00+01:00"})
 
     def answer(self, status, body):
         data = json.dumps(body).encode()
