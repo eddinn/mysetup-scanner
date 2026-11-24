@@ -98,7 +98,7 @@ func TestEveryOtherAnswerIsAnErrorWithNoLink(t *testing.T) {
 }
 
 func TestTooManyTriesSaysWhenFromRetryAfter(t *testing.T) {
-	for header, says := range map[string]string{"1500": "Try again in 25 minutes,", "30": "Try again in a minute,", "soon": "Try again in half an hour,"} {
+	for header, says := range map[string]string{"1500": "Try again in 25 minutes,", "30": "Try again in a minute,", "0": "Try again now,", "soon": "Try again in half an hour,"} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Retry-After", header)
 			w.WriteHeader(http.StatusTooManyRequests)

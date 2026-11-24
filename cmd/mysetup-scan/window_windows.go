@@ -29,6 +29,7 @@ var (
 	procCloseClipboard        = user32.NewProc("CloseClipboard")
 	procGetShellWindow        = user32.NewProc("GetShellWindow")
 	procFreeConsole           = kernel32.NewProc("FreeConsole")
+	procGetConsoleWindow      = kernel32.NewProc("GetConsoleWindow")
 	advapi32                  = windows.NewLazySystemDLL("advapi32.dll")
 	procCreateProcessWithTokW = advapi32.NewProc("CreateProcessWithTokenW")
 )
@@ -172,12 +173,14 @@ func canAsk() bool {
 	return true
 }
 
-// copyToClipboard puts the report on the clipboard as text, for the member to paste. It writes nothing to disk.
+// copyToClipboard puts the report, or the link, on the clipboard as text, for the member to paste. It writes nothing to disk. The
+// console window owns the clipboard while it writes: with no owner, Windows may refuse the text (Codex's review, 2026-11-24).
 func copyToClipboard(text string) bool {
 	const cfUnicodeText, gmemMoveable = 13, 0x0002
 	data := utf16.Encode([]rune(text + "\x00"))
 	size := uintptr(len(data) * 2)
-	if ok, _, _ := procOpenClipboard.Call(0); ok == 0 {
+	owner, _, _ := procGetConsoleWindow.Call()
+	if ok, _, _ := procOpenClipboard.Call(owner); ok == 0 {
 		return false
 	}
 	defer procCloseClipboard.Call()

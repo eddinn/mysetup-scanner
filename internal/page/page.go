@@ -306,14 +306,25 @@ Done, close this tab, or after 15 minutes.</p>
 </main>
 <script nonce="{{.Nonce}}">
 const status = document.getElementById('status');
-// Back from mysetup.is by the browser's Back button, the page comes from its cache with its check-ins stopped: load it afresh.
-addEventListener('pageshow', (event) => { if (event.persisted) location.reload(); });
-// While this tab is open, it tells the app so; once it closes, the app stops by itself.
-const alive = setInterval(() => fetch('alive').catch(() => {}), 20000);
-// Sending: this page only asks; the app sends the report shown here (internal/send), and this tab goes on to the link it got back.
 const sendButton = document.getElementById('send');
+const sendStatus = document.getElementById('send-status');
+// While this tab is open, it tells the app so; once it closes, the app stops by itself.
+const checkIn = () => fetch('alive').catch(() => {});
+let alive = setInterval(checkIn, 20000);
+// Back from mysetup.is by the browser's Back button, the page comes from its cache with its check-ins stopped: they start again in
+// place, so the report stays here to copy even when the app has stopped meanwhile (Codex's review, 2026-11-24).
+addEventListener('pageshow', (event) => {
+  if (!event.persisted) return;
+  clearInterval(alive);
+  alive = setInterval(checkIn, 20000);
+  checkIn();
+  if (sendButton) {
+    sendButton.disabled = false;
+    sendStatus.textContent = '';
+  }
+});
+// Sending: this page only asks; the app sends the report shown here (internal/send), and this tab goes on to the link it got back.
 if (sendButton) {
-  const sendStatus = document.getElementById('send-status');
   sendButton.addEventListener('click', async () => {
     sendButton.disabled = true;
     sendStatus.classList.remove('error');

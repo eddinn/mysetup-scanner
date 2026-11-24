@@ -120,8 +120,12 @@ func post(ctx context.Context, endpoint, report, version string) (Link, error) {
 // retryIn says when to try again, from a Retry-After of seconds; without one, in half an hour, the longest the site's limits last.
 func retryIn(header string) string {
 	seconds, err := strconv.Atoi(strings.TrimSpace(header))
-	if err != nil || seconds <= 0 || seconds > 24*60*60 {
+	if err != nil || seconds < 0 || seconds > 24*60*60 {
 		return "in half an hour"
+	}
+	if seconds == 0 {
+		// The site's window has just ended.
+		return "now"
 	}
 	minutes := (seconds + 59) / 60
 	if minutes == 1 {
