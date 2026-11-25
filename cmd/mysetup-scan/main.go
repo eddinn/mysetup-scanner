@@ -1,13 +1,14 @@
 // mysetup-scan reads this computer's hardware into a report for the member's MySetup build, the same report the scripts print
-// (docs/report-format.md). It sends the report to MySetup only when the member types a code from their build page, and only
-// there (internal/send); nothing else is sent, no files are written, nothing is installed.
+// (docs/report-format.md). It sends the report to MySetup only when the member asks it to, and only there (internal/send); MySetup
+// answers with a one-time link where the member signs in and chooses the build (MySetup's docs/scanner/design.md, One tab). Nothing
+// else is sent, no files are written, nothing is installed.
 //
-// By default it shows the report on a page in the member's own browser, served from this computer only, with a box for the code,
-// buttons to copy or save the report instead, and numbered steps for what to do next (internal/page). That holds run with sudo or as administrator too: the app reads
+// By default it shows the report on a page in the member's own browser, served from this computer only, with a button that sends it
+// and takes that tab on to MySetup, buttons to copy or save the report instead, and numbered steps for what to do next (internal/page). That holds run with sudo or as administrator too: the app reads
 // first, then gives up root for the person who ran it (Linux, the BSDs, macOS), or starts itself again without administrator
 // rights (Windows), so neither the page nor the browser runs elevated. Only where there is no desktop at all (over SSH, for
 // example) does it print the report in the terminal instead, and say why. With --cli it prints the report in the terminal, always.
-// In the terminal it asks for the code after the report, when a member can see the question and answer it.
+// In the terminal it asks whether to send after the report, when a member can see the question and answer it, and prints the link.
 // Run with root on Linux and the BSDs, it can also read what the system keeps from ordinary users, such as memory modules on a
 // system without udev.
 package main
@@ -35,12 +36,12 @@ const (
 	// pageLife is how long the page is served at most; pageGone is how long after its tab stopped checking in the app ends.
 	pageLife = 15 * time.Minute
 	pageGone = 90 * time.Second
-	// tries is how many codes the terminal takes before it gives the steps to copy and paste instead.
-	tries = 5
+	// tries is how many times the terminal offers to send before it gives the steps to copy and paste instead.
+	tries = 3
 )
 
-// input is what the member types in the terminal, read through one buffer: the code, and the Enter that closes a window of its
-// own on Windows.
+// input is what the member types in the terminal, read through one buffer: the answer to sending, and the Enter that closes a
+// window of its own on Windows.
 var input = bufio.NewReader(os.Stdin)
 
 // buildsURL is where a member finds their builds on the MySetup the app sends to.
@@ -57,7 +58,7 @@ func siteName() string {
 
 // about is the line the app starts with: its version, and what it sends where. A development build says so.
 func about() string {
-	line := fmt.Sprintf("MySetup scan %s. It reads hardware names, and sends the report to %s only when you type a code from your build page.",
+	line := fmt.Sprintf("MySetup scan %s. It reads hardware names, and sends the report to %s only when you ask it to.",
 		scan.FullVersion(), siteName())
 	if send.Development {
 		line += " This is a development build, for tests only."
@@ -150,12 +151,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 // printReport prints the report in the terminal: the report itself to stdout, everything said around it to stderr. Then, where a
-// member can answer, it asks for the code to send it with.
+// member can answer, it asks whether to send it.
 func printReport(h scan.Hardware, text, why string, stdout, stderr io.Writer) int {
-	sent := false
-	// Double-clicked on Windows, the window would close the moment the app ends: it stays open, with the report copied unless it
-	// was sent.
-	defer func() { keepWindowOpen(text, sent, stderr) }()
+	link := ""
+	// Double-clicked on Windows, the window would close the moment the app ends: it stays open, with the link copied when the
+	// report was sent, and the report copied when it was not.
+	defer func() { keepWindowOpen(text, link, stderr) }()
 	fmt.Fprintln(stderr, about())
 	if why != "" {
 		fmt.Fprintln(stderr, why)
@@ -171,46 +172,74 @@ func printReport(h scan.Hardware, text, why string, stdout, stderr io.Writer) in
 	}
 	if !canAsk() {
 		fmt.Fprint(stderr, copySteps())
-		fmt.Fprintln(stderr, "To send it straight to your build with a code instead, run the app in a terminal, where it can ask for the code.")
+		fmt.Fprintln(stderr, "To send it straight to "+siteName()+" instead, start the app where it can ask you: double-click it, or run it")
+		fmt.Fprintln(stderr, "in a terminal with nothing piped into it (over SSH, connect with ssh -t).")
 
 		return 0
 	}
-	sent = askAndSend(input, stderr, sender(text))
+	link = askAndSend(input, stderr, sender(text))
 
 	return 0
 }
 
-// sender sends this report, and only this one, with a code the member typed.
-func sender(text string) func(context.Context, string) (string, error) {
-	return func(ctx context.Context, code string) (string, error) {
-		return send.Report(ctx, code, text, scan.FullVersion())
+// sender sends this report, and only this one, when the member asked.
+func sender(text string) func(context.Context) (send.Link, error) {
+	return func(ctx context.Context) (send.Link, error) {
+		return send.Report(ctx, text, scan.FullVersion())
 	}
 }
 
-// askAndSend gives the steps to send the report and asks for the code: typing it is the member's approval, and Enter without one
-// sends nothing and gives the steps to copy and paste instead (MySetup's docs/scanner/design.md, Pairing). It says what came of
-// each try, and after a few it stops asking. It says whether the report was sent.
-func askAndSend(in *bufio.Reader, out io.Writer, sendReport func(context.Context, string) (string, error)) bool {
+// pageSender is sender for the page, which needs only the link's address.
+func pageSender(text string) func(context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		link, err := sender(text)(ctx)
+
+		return link.URL, err
+	}
+}
+
+// askAndSend gives the steps to send the report and asks. Only y (or yes) is the member's approval and sends it: Enter alone
+// copies and pastes instead, as it did in 0.2.0, so nobody sends by habit (Codex's review, 2026-11-24); so do n and the input
+// ending. Anything else asks again. It prints the one-time link MySetup gives back and until when it works, says what came of
+// each try, and after a few it stops asking. It returns the link, or "" when nothing was sent.
+func askAndSend(in *bufio.Reader, out io.Writer, sendReport func(context.Context) (send.Link, error)) string {
 	fmt.Fprint(out, sendSteps())
-	for try := 1; try <= tries; try++ {
-		fmt.Fprint(out, "Code: ")
+	// Only a try at sending counts; an answer that is neither asks again.
+	for try := 1; try <= tries; {
+		fmt.Fprint(out, "Send it to "+siteName()+"? Type y and press Enter to send it, or press Enter alone to copy and paste it instead: ")
 		line, err := in.ReadString('\n')
-		code := strings.TrimSpace(line)
-		if code == "" {
-			if err != nil {
-				// The input ended (Ctrl+D) with no line of its own.
-				fmt.Fprintln(out)
-			}
+		answer := strings.ToLower(strings.TrimSpace(line))
+		if err != nil && answer == "" {
+			// The input ended (Ctrl+D) with no answer of its own: that is no approval.
+			fmt.Fprintln(out)
 
 			break
 		}
-		fmt.Fprintln(out, "Sending the report...")
-		link, err := sendReport(context.Background(), code)
-		if err == nil {
-			fmt.Fprintf(out, "\nSent. Open this address in your web browser to review it:\n  %s\n", link)
-			fmt.Fprintln(out, `Check each part, then click "Add these parts". Nothing changes in your build until you do.`)
+		if answer == "" || answer == "n" || answer == "no" {
+			break
+		}
+		if answer != "y" && answer != "yes" {
+			fmt.Fprintln(out, "Type y and press Enter to send it, or press Enter alone to copy and paste it.")
+			if err != nil {
+				break
+			}
 
-			return true
+			continue
+		}
+		try++
+		fmt.Fprintln(out, "Sending the report...")
+		link, err := sendReport(context.Background())
+		if err == nil {
+			until := "for 30 minutes"
+			if !link.Expires.IsZero() {
+				until = "until " + link.Expires.Local().Format("15:04")
+			}
+			fmt.Fprintf(out, "\nSent. Open this link in your web browser, on this computer or another, to add the report to your build:\n  %s\n", link.URL)
+			fmt.Fprintln(out, "It works once, "+until+". Copy it as in step 2, paste it into your browser's address bar and press Enter.")
+			fmt.Fprintln(out, `Sign in if it asks, check that the scan is yours, choose your build and click "Review this scan".`)
+			fmt.Fprintln(out, `Then check each part and click "Add these parts". Nothing changes in your build until you do.`)
+
+			return link.URL
 		}
 		var refused *send.Refused
 		if errors.As(err, &refused) {
@@ -218,24 +247,22 @@ func askAndSend(in *bufio.Reader, out io.Writer, sendReport func(context.Context
 		} else {
 			fmt.Fprintln(out, "The report was not sent: "+err.Error()+".")
 		}
-		if try < tries {
-			fmt.Fprintln(out, "Type the code again, or a new one, or press Enter without a code to copy and paste the report instead.")
-		}
 	}
 	fmt.Fprint(out, "\nNothing was sent.\n\n"+copySteps())
 
-	return false
+	return ""
 }
 
-// sendSteps say, for someone who has never done it, how the report gets from the terminal to their build with a code.
+// sendSteps say, for someone who has never done it, how the report gets from the terminal to their build.
 func sendSteps() string {
-	return `What to do now: send it to your build in 3 steps.
-  1. In your web browser, go to ` + buildsURL() + ` and sign in if it asks.
-     Click your build. No build yet? Click "Create setup" first.
-  2. Scroll down to "Hardware" and find "Scan this computer". Open "With the MySetup app" and click "Get a code".
-     The code works once, for 10 minutes.
-  3. Type the code here and press Enter. The app sends the report above to ` + siteName() + `, and nothing else.
-To copy and paste the report instead, press Enter without a code.
+	return `What to do now: send it to your build in 4 steps.
+  1. Type y and press Enter here. The app sends the report above to ` + siteName() + `, and nothing else, and prints a link.
+  2. Open that link in your web browser, on this computer or another: select it with the mouse, copy it (in most Linux
+     terminals press Ctrl+Shift+C, on a Mac Cmd+C, in Windows Terminal or PowerShell Ctrl+C), paste it into the browser's
+     address bar and press Enter. Sign in if it asks.
+  3. Check that the scan shown is yours, choose your build and click "Review this scan". No build yet? That page says how.
+  4. Check each part, then click "Add these parts". Nothing changes in your build until you do.
+To copy and paste the report instead, press Enter alone.
 
 `
 }
@@ -276,7 +303,7 @@ func showPage(h scan.Hardware, text string, session *page.Session, opts options,
 
 		return 1
 	}
-	content := page.Content{Version: scan.FullVersion(), Report: text, Notes: h.Notes, BuildsURL: buildsURL(), Site: siteName(), Send: sender(text)}
+	content := page.Content{Version: scan.FullVersion(), Report: text, Notes: h.Notes, BuildsURL: buildsURL(), Site: siteName(), Send: pageSender(text)}
 	server, err := page.New(content, listener, pageLife, pageGone)
 	if err != nil {
 		_ = listener.Close()
@@ -314,14 +341,14 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "MySetup scan %s: reads this computer's hardware into a report for your build on %s.\n\n", scan.FullVersion(), siteName())
 	fmt.Fprintln(w, "Usage: mysetup-scan [--cli | --no-browser] [--help] [--version]")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  (no option)   show the report on a page in your web browser, with the steps to send it to your build")
-	fmt.Fprintln(w, "                with a code from your build page, or to copy or save it instead")
-	fmt.Fprintln(w, "  --cli         print the report in this terminal instead, with the same steps, and ask for the code here")
+	fmt.Fprintln(w, "  (no option)   show the report on a page in your web browser, with a button that sends it to your build")
+	fmt.Fprintln(w, "                on "+siteName()+", or buttons to copy or save it instead")
+	fmt.Fprintln(w, "  --cli         print the report in this terminal instead; type y to send it, and it prints the link")
 	fmt.Fprintln(w, "  --no-browser  serve the page without opening a browser, and print its address to open yourself")
 	fmt.Fprintln(w, "  --help        show this help")
 	fmt.Fprintln(w, "  --version     show the version")
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "It sends the report to %s only when you type a code from your build page there, and nothing else\n", siteName())
+	fmt.Fprintf(w, "It sends the report to %s only when you ask it to, and nothing else\n", siteName())
 	fmt.Fprintln(w, "anywhere; it writes no files and installs nothing. The page is served on this computer only (127.0.0.1)")
 	fmt.Fprintln(w, "and stops when you click Done, close its tab, or after 15 minutes.")
 	fmt.Fprintln(w, "Run with sudo or as administrator, it still opens your browser as you, never as root or administrator.")

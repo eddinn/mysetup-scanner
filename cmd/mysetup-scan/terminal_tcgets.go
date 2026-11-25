@@ -18,6 +18,6 @@ func isTerminal(f *os.File) bool {
 // stderrIsTerminal says whether the app writes to a terminal.
 func stderrIsTerminal() bool { return isTerminal(os.Stderr) }
 
-// canAsk says whether the app can ask the member for a code: it reads from a terminal and writes to one, so a member sees the
+// canAsk says whether the app can ask the member whether to send: it reads from a terminal and writes to one, so a member sees the
 // question and can answer it. Run by a script or with its input redirected, it never waits for an answer nobody can give.
 func canAsk() bool { return isTerminal(os.Stdin) && isTerminal(os.Stderr) }

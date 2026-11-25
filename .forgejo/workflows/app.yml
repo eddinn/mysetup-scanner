@@ -82,15 +82,30 @@ jobs:
       # executable, says its version and gives a valid report. GitHub's ARM runner checks the arm64 download the same way.
       - name: The Linux download works as extracted
         run: tools/check-linux-download.sh "$RUNNER_TEMP/dist" x86-64
-      # Forgejo's own artifact action: GitHub's refuses any server that is not github.com.
+      # Forgejo's own artifact action: GitHub's refuses any server that is not github.com. One artifact per system, so a download
+      # is that system's files only (the operator, 2026-11-25: "should not bundle linux/win binaries"); each carries SHA256SUMS.
+      - name: The downloads, one folder per system
+        run: |
+          for system in windows linux; do
+            mkdir -p "$RUNNER_TEMP/per-system/$system"
+            cp "$RUNNER_TEMP"/dist/mysetup-scan-"$system"-* "$RUNNER_TEMP/per-system/$system/"
+            (cd "$RUNNER_TEMP/per-system/$system" && grep -F " mysetup-scan-$system-" "$RUNNER_TEMP/dist/SHA256SUMS" > SHA256SUMS && sha256sum -c SHA256SUMS)
+          done
       - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
         with:
-          name: mysetup-scan-downloads
-          path: ${{ runner.temp }}/dist/
+          name: mysetup-scan-downloads-windows
+          path: ${{ runner.temp }}/per-system/windows/
+          retention-days: 14
+      - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
+        with:
+          name: mysetup-scan-downloads-linux
+          path: ${{ runner.temp }}/per-system/linux/
           retention-days: 14
       # Development builds for a test against staging (docs/app.md, Sending), kept beside the downloads: they send only to
       # staging.mysetup.is and say they are for tests, and tools/build-release.sh refuses them, so they never become a download.
-      # The same source gives the same bytes, so a local build can be compared with SHA256SUMS.
+      # The same source gives the same bytes, so a local build can be compared with SHA256SUMS. A tester fetches them from
+      # staging itself, as plain files curl or wget takes without a login (homelab-ansible docs/services/mysetup-staging-downloads.md):
+      # Forgejo asks for a login and hands an artifact out as one zip.
       - name: Development builds for a test on staging
         run: |
           dev=$RUNNER_TEMP/dev
@@ -106,8 +121,17 @@ jobs:
           (cd "$dev" && sha256sum mysetup-scan-dev-* > SHA256SUMS && cat SHA256SUMS)
       - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
         with:
-          name: mysetup-scan-dev-staging
-          path: ${{ runner.temp }}/dev/
+          name: mysetup-scan-dev-staging-windows
+          path: |
+            ${{ runner.temp }}/dev/mysetup-scan-dev-windows-x86-64.exe
+            ${{ runner.temp }}/dev/SHA256SUMS
+          retention-days: 14
+      - uses: forgejo/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
+        with:
+          name: mysetup-scan-dev-staging-linux
+          path: |
+            ${{ runner.temp }}/dev/mysetup-scan-dev-linux-x86-64.tar.gz
+            ${{ runner.temp }}/dev/SHA256SUMS
           retention-days: 14
 
   run:
@@ -151,8 +175,8 @@ jobs:
           if kill -0 "$app" 2>/dev/null; then echo "The app did not end after Done."; kill "$app"; exit 1; fi
           wait "$app"
       # Sending, end to end with a development build and a stand-in for MySetup on the runner: the page's send refused from
-      # another site, a wrong code answered in the site's words, the right one sending the same report; on Linux, the terminal
-      # asking for the code too.
+      # another site, the site's refusal answered in its words, the next send carrying the same report and giving the link; on
+      # Linux, the terminal asking and printing the link too.
       - name: Sending on this runner
         shell: bash
         run: tools/check-send.sh

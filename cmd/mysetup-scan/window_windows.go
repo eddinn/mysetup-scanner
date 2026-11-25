@@ -29,6 +29,7 @@ var (
 	procCloseClipboard        = user32.NewProc("CloseClipboard")
 	procGetShellWindow        = user32.NewProc("GetShellWindow")
 	procFreeConsole           = kernel32.NewProc("FreeConsole")
+	procGetConsoleWindow      = kernel32.NewProc("GetConsoleWindow")
 	advapi32                  = windows.NewLazySystemDLL("advapi32.dll")
 	procCreateProcessWithTokW = advapi32.NewProc("CreateProcessWithTokenW")
 )
@@ -159,7 +160,7 @@ func ownWindow() bool {
 	return n == 1
 }
 
-// canAsk says whether the app can ask the member for a code: it reads and writes a console, not a pipe or a file another
+// canAsk says whether the app can ask the member whether to send: it reads and writes a console, not a pipe or a file another
 // program gave it, so a member sees the question and can answer it.
 func canAsk() bool {
 	for _, f := range []*os.File{os.Stdin, os.Stderr} {
@@ -172,12 +173,14 @@ func canAsk() bool {
 	return true
 }
 
-// copyToClipboard puts the report on the clipboard as text, for the member to paste. It writes nothing to disk.
+// copyToClipboard puts the report, or the link, on the clipboard as text, for the member to paste. It writes nothing to disk. The
+// console window owns the clipboard while it writes: with no owner, Windows may refuse the text (Codex's review, 2026-11-24).
 func copyToClipboard(text string) bool {
 	const cfUnicodeText, gmemMoveable = 13, 0x0002
 	data := utf16.Encode([]rune(text + "\x00"))
 	size := uintptr(len(data) * 2)
-	if ok, _, _ := procOpenClipboard.Call(0); ok == 0 {
+	owner, _, _ := procGetConsoleWindow.Call()
+	if ok, _, _ := procOpenClipboard.Call(owner); ok == 0 {
 		return false
 	}
 	defer procCloseClipboard.Call()
@@ -207,12 +210,16 @@ func copyToClipboard(text string) bool {
 
 // keepWindowOpen, in a window of its own, waits for Enter before the window closes, and first, unless the report was sent, copies
 // it to the clipboard and says so.
-func keepWindowOpen(report string, sent bool, stderr io.Writer) {
+func keepWindowOpen(report, link string, stderr io.Writer) {
 	if !ownWindow() {
 		return
 	}
 	fmt.Fprintln(stderr)
-	if sent {
+	if link != "" {
+		// A stray Enter closes the window, and the link with it: it is on the clipboard as well.
+		if copyToClipboard(link) {
+			fmt.Fprintln(stderr, "The link is also copied for you: paste it into your browser's address bar and press Enter.")
+		}
 		fmt.Fprintln(stderr, "Press Enter here to close this window.")
 		_, _ = input.ReadString('\n')
 
