@@ -13,7 +13,7 @@ motherboard, memory and storage, by name only. You check it on your build page b
 
 - **The app** is the easiest: download it, double-click it, and your report opens on a page in your web browser. Click **Send to
   mysetup.is** there and that tab goes on to choose your build ([the last steps](#last-send-it-to-your-build)). Its release for
-  Windows and Linux is [app-v0.2.0](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.2.0).
+  Windows and Linux is [app-v0.3.0](https://github.com/eddinn/mysetup-scanner/releases/tag/app-v0.3.0).
 - **The script** is a text file you can read before you run it, for every system including macOS. It sends nothing: you copy its
   report and paste it on your build page ([the last steps](#last-paste-it-on-your-build)). Its release is
   [v0.2.0](https://github.com/eddinn/mysetup-scanner/releases/tag/v0.2.0).
@@ -37,9 +37,9 @@ There are two ways to start it. Pick one and follow its steps to the end:
 <details>
 <summary><b>Windows: download and double-click</b></summary>
 
-1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-x86-64.exe).
+1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.3.0/mysetup-scan-windows-x86-64.exe).
    On a Windows computer with an ARM processor (such as a Snapdragon laptop), download
-   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-arm64.exe) instead.
+   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.3.0/mysetup-scan-windows-arm64.exe) instead.
 2. If your browser says the file "isn't commonly downloaded", keep it:
    - in Edge, point at the warning, click the three dots `...`, click **Keep**, then **Show more**, then **Keep anyway**;
    - in Chrome, click **Keep**.
@@ -57,9 +57,9 @@ instead: Smart App Control blocks apps that are not code-signed yet.
 <details>
 <summary><b>Linux: download, extract and double-click</b></summary>
 
-1. Download the app: [mysetup-scan-linux-x86-64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-linux-x86-64.tar.gz).
+1. Download the app: [mysetup-scan-linux-x86-64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.3.0/mysetup-scan-linux-x86-64.tar.gz).
    On an ARM computer, such as a Raspberry Pi 4 or 5 with a 64-bit system, download
-   [mysetup-scan-linux-arm64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-linux-arm64.tar.gz) instead; its names below end in `arm64`.
+   [mysetup-scan-linux-arm64.tar.gz](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.3.0/mysetup-scan-linux-arm64.tar.gz) instead; its names below end in `arm64`.
 2. Open your Downloads folder in your file manager (on Ubuntu, the **Files** app).
 3. Double-click **mysetup-scan-linux-x86-64.tar.gz**. Ubuntu's Files unpacks it into a new folder,
    **mysetup-scan-linux-x86-64**. If your file manager shows what is inside the file instead, right-click the file and click
@@ -77,8 +77,8 @@ message box.
 <details>
 <summary><b>Windows: in a terminal (<code>--cli</code>)</b></summary>
 
-1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-x86-64.exe) (on ARM,
-   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-windows-arm64.exe), and use that name in step 4). If your browser warns
+1. Download the app: [mysetup-scan-windows-x86-64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.3.0/mysetup-scan-windows-x86-64.exe) (on ARM,
+   [mysetup-scan-windows-arm64.exe](https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.3.0/mysetup-scan-windows-arm64.exe), and use that name in step 4). If your browser warns
    about it, keep it as in step 2 of **Windows: download and double-click**.
 2. Open PowerShell: press the Windows key, type **PowerShell**, and press **Enter**. A window opens where you can type.
 3. Copy this line, paste it into PowerShell (a right-click in the window pastes), and press **Enter**. It takes PowerShell to your
@@ -114,7 +114,7 @@ message box.
 
    ```sh
    cd "$(xdg-user-dir DOWNLOAD 2>/dev/null || echo ~/Downloads)"
-   curl -fLO https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.2.0/mysetup-scan-linux-x86-64.tar.gz
+   curl -fLO https://github.com/eddinn/mysetup-scanner/releases/download/app-v0.3.0/mysetup-scan-linux-x86-64.tar.gz
    tar -xzf mysetup-scan-linux-x86-64.tar.gz
    ./mysetup-scan-linux-x86-64/mysetup-scan --cli
    ```

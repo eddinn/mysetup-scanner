@@ -7,8 +7,9 @@ Stage 2 is sending: the site's codes, upload route and checks are MySetup's, and
 build page ([Sending](#sending)), on the page and in the terminal, since 0.2.0 (released 2026-11-13, after the operator's test
 on staging and his go). Since 0.3.0 it sends without a code, and MySetup answers with a one-time link where the member signs in
 and chooses the build: one tab instead of three (MySetup's `docs/scanner/design.md`, One tab; the operator's go of 2026-11-24).
-Code signing comes after stage 2. The current release is `app-v0.2.0`; `app-v0.1.0` (2026-11-12) could
-not send. The member's steps, for each system and both ways of starting it (double-click, or a terminal with `--cli`), are in the
+Code signing comes after stage 2. The current release is `app-v0.3.0` (2026-11-25, after the operator's test on staging of its development builds on Windows
+and Linux: "both win and linux work great, streamlined and simple"); `app-v0.2.0` (2026-11-13) sent with a code, and
+`app-v0.1.0` (2026-11-12) could not send. The member's steps, for each system and both ways of starting it (double-click, or a terminal with `--cli`), are in the
 [README](../README.md); they describe the current release.
 
 ## The page and the terminal
@@ -101,7 +102,12 @@ A development build, `go build -tags dev`, sends to MySetup's staging site inste
 that is `https://staging.mysetup.is` or `http://127.0.0.1` or `http://localhost` with a port, for a test
 ([site_dev.go](../internal/send/site_dev.go)); any other value is ignored. It says it is a development build, and names the site
 in its steps. `tools/build-release.sh` refuses a program that names staging or `MYSETUP_SCAN_SITE`, so a development build can
-never become a download.
+never become a download. For a test, a branch's development builds (the homelab CI's step "Development builds for a test on
+staging", which prints their SHA-256) are built again from the same commit, checked against those sums and put on staging itself,
+one folder per build, where a browser, curl or wget fetches each file without a login:
+`https://staging.mysetup.is/dev-downloads/app-<version>-<commit>/` (homelab-ansible's
+`docs/services/mysetup-staging-downloads.md`; 0.3.0's were at `app-0.3.0-2c46d7b/`). The CI's own artifacts, one per system,
+need a Forgejo login and come as a zip.
 
 ## Every system, nothing to install
 
